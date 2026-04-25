@@ -1,12 +1,12 @@
 import streamlit as st
-import streamlit.components.v1 as components
 
+# ==================== 完整 HTML + JS 代码 ====================
 html_code = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>IPTV 本地检测工具</title>
+    <title>IPTVNator 本地检测工具 v1.7</title>
     <style>
         body { 
             font-family: system-ui, sans-serif; 
@@ -44,7 +44,7 @@ html_code = """
             background: #1e2937; 
             padding: 15px; 
             border-radius: 8px; 
-            min-height: 350px; 
+            min-height: 400px; 
             white-space: pre-wrap; 
             font-family: monospace;
             overflow: auto;
@@ -53,8 +53,8 @@ html_code = """
 </head>
 <body>
 <div class="container">
-    <h1>🚀 IPTVNator 批量检测工具 - 本地版</h1>
-    <p style="text-align:center; color:#94a3b8;">所有检测在您的浏览器中执行（真实网络）</p>
+    <h1>🚀 IPTVNator 批量检测工具 v1.7 - 本地检测版</h1>
+    <p style="text-align:center; color:#94a3b8;">所有请求直接在您的浏览器中执行，更真实、更安全</p>
 
     <label>用户名:</label>
     <input type="text" id="username" placeholder="输入用户名">
@@ -63,19 +63,19 @@ html_code = """
     <input type="password" id="password" placeholder="输入密码">
 
     <label>服务器地址（一行一个）:</label>
-    <textarea id="servers" rows="10" placeholder="http://example.com:8080"></textarea>
+    <textarea id="servers" rows="10" placeholder="http://example.com:8080\nhttp://test.tv:12345"></textarea>
 
     <button onclick="startTest()">🚀 开始本地批量检测</button>
 
     <h3>检测结果（实时）:</h3>
-    <pre id="result">点击按钮后这里会出现进度...\n如果没有反应，请按 F12 查看控制台</pre>
+    <pre id="result">点击上方按钮开始检测...\n如果没有反应，请按 F12 查看控制台</pre>
 </div>
 
 <script>
-console.log("✅ JS 脚本已加载 - " + new Date().toLocaleTimeString());
+console.log("✅ IPTV 本地检测工具 JS 已成功加载");
 
 async function testSingleServer(server, username, password) {
-    console.log("测试服务器:", server);
+    console.log("正在检测:", server);
     if (!server.startsWith("http")) server = "http://" + server;
     server = server.replace(/\/$/, "");
     const url = server + "/player_api.php?username=" + encodeURIComponent(username) + "&password=" + encodeURIComponent(password);
@@ -84,35 +84,42 @@ async function testSingleServer(server, username, password) {
         const resp = await fetch(url, {
             method: "GET",
             signal: AbortSignal.timeout(15000),
-            headers: {"User-Agent": "Mozilla/5.0"}
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
         });
-        if (!resp.ok) return `❌ HTTP ${resp.status}`;
+        
+        if (!resp.ok) return `❌ HTTP错误 ${resp.status}`;
+        
         const data = await resp.json();
-        if (!data.user_info) return "❌ 登录失败（无 user_info）";
-        return "✅ 可用 | 状态: " + (data.user_info.status || "Unknown");
+        if (!data || !data.user_info) return "❌ 登录失败（无 user_info）";
+        
+        const ui = data.user_info;
+        let exp = ui.exp_date || "永久";
+        if (/^\\d+$/.test(String(exp))) {
+            exp = new Date(exp * 1000).toLocaleString();
+        }
+        return `✅ 可用 | 状态: ${ui.status || "Unknown"} | 过期: ${exp}`;
     } catch (e) {
         console.error(e);
-        return e.name === "TimeoutError" ? "❌ 超时 (>15s)" : "❌ 连接失败";
+        return e.name === "TimeoutError" ? "❌ 超时 (>15s)" : "❌ 连接失败或被阻挡";
     }
 }
 
 async function startTest() {
-    console.log("🚀 startTest() 函数被触发！");
-    alert("✅ 按钮点击成功！\n\n现在请查看 F12 控制台是否有输出或错误。");
+    console.log("🚀 startTest() 被成功触发！");
     
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
     const serversText = document.getElementById("servers").value.trim();
     
     if (!username || !password || !serversText) {
-        alert("请填写完整信息！");
+        alert("请填写用户名、密码和服务器列表！");
         return;
     }
     
     const servers = serversText.split("\n").map(s => s.trim()).filter(s => s);
     const resultDiv = document.getElementById("result");
     
-    resultDiv.textContent = `开始检测 ${servers.length} 个服务器...\n\n`;
+    resultDiv.textContent = `🚀 开始检测 ${servers.length} 个服务器...\n\n`;
     
     for (let i = 0; i < servers.length; i++) {
         const server = servers[i];
@@ -121,21 +128,21 @@ async function startTest() {
         const res = await testSingleServer(server, username, password);
         resultDiv.textContent += `→ ${res}\n\n`;
         
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 400));
     }
     
-    resultDiv.textContent += "✅ 检测完成！";
+    resultDiv.textContent += "✅ 批量检测完成！";
+    console.log("检测流程结束");
 }
-
-console.log("脚本初始化完成，按钮已绑定");
 </script>
 </body>
 </html>
 """
 
-st.set_page_config(page_title="IPTV 本地检测工具", layout="wide", page_icon="🚀")
+st.set_page_config(page_title="IPTVNator 本地检测工具", layout="wide", page_icon="🚀")
 
-# 关键修复：增大 height + 启用 scrolling
-components.html(html_code, height=1100, scrolling=True)
+# 使用 st.html + unsafe_allow_javascript=True（关键修复）
+st.html(html_code, unsafe_allow_javascript=True)
 
-st.info("🔍 **重要**：点击按钮后请立即按 **F12** → Console 标签，查看是否有 'JS 脚本已加载' 或红色错误，然后把内容告诉我。")
+st.caption("💡 本工具所有网络请求均在您的浏览器本地执行，不会经过任何服务器。")
+st.info("🔍 点击按钮后若无反应，请按 **F12** → Console 查看是否有错误信息，并告诉我。")
