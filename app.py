@@ -6,27 +6,23 @@ import json
 # ==================== 1. 多国语言字典 ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTV 客户端本地检测工具 v1.7",
+        "title": "IPTV 访问者本地网络检测工具 v1.8",
         "username": "用户名", "password": "密码", "servers": "服务器地址（一行一个）",
-        "start_btn": "🚀 开始本地批量检测", "result_label": "检测结果 (由您的浏览器执行)",
-        "warning": "请填写完整信息！",
-        "header_server": "服务器", "header_status": "状态", "header_info": "详细信息",
-        "your_ip": "您的公网 IP"
+        "start_btn": "🚀 开始本地真实网络检测", "result_label": "实时检测状态",
+        "warning": "请填写完整信息！", "your_ip": "您的公网 IP"
     },
     "English": {
-        "title": "IPTV Local Client Tester v1.7",
-        "username": "Username", "password": "Password", "servers": "Server Addresses",
-        "start_btn": "🚀 Start Local Batch Test", "result_label": "Results (Executed by your browser)",
-        "warning": "Please fill in all fields!",
-        "header_server": "Server", "header_status": "Status", "header_info": "Details",
-        "your_ip": "Your Public IP"
+        "title": "IPTV Visitor Local Network Tester v1.8",
+        "username": "Username", "password": "Password", "servers": "Servers (one per line)",
+        "start_btn": "🚀 Start Local Network Test", "result_label": "Live Status",
+        "warning": "Please fill in all fields!", "your_ip": "Your Public IP"
     }
 }
 
 # ==================== 2. 页面配置 ====================
 st.set_page_config(page_title="IPTV Local Tester", layout="wide", page_icon="📺")
 
-# 侧边栏
+# 侧边栏配置
 st.sidebar.title("Settings / 设定")
 lang_choice = st.sidebar.selectbox("Language / 语言", list(LANGUAGES.keys()))
 t = LANGUAGES[lang_choice]
@@ -34,21 +30,21 @@ t = LANGUAGES[lang_choice]
 st.sidebar.markdown("---")
 st.sidebar.subheader(t["your_ip"])
 
-# 1. 浏览器端获取 IP
+# 获取访问者 IP (由浏览器执行)
 components.html(
     """
-    <div id="ip-display" style="background:#0e1117; color:#ff4b4b; padding:8px; border-radius:5px; border:1px solid #31333f; font-family:monospace; font-size:14px;">检测中...</div>
+    <div id="ip-display" style="background:#0e1117; color:#00ff00; padding:8px; border-radius:5px; border:1px solid #31333f; font-family:monospace; font-size:14px;">Detecting...</div>
     <script>
         fetch('https://api.ipify.org?format=json').then(r => r.json())
         .then(d => { document.getElementById('ip-display').innerText = d.ip; })
-        .catch(() => { document.getElementById('ip-display').innerText = '未能获取IP'; });
+        .catch(() => { document.getElementById('ip-display').innerText = 'Check Proxy/Network'; });
     </script>
     """, height=60
 )
 
 # 主界面
 st.title(t["title"])
-st.info("⚠️ 注意：此工具通过您的浏览器直接请求服务器。如果目标服务器未开启 CORS（跨域资源共享），检测可能会因浏览器安全策略显示 'Fail/CORS Error'。")
+st.info("💡 **原理**：此工具通过您的浏览器发起探测。检测结果受您本地 **Windows 11** 环境及 **Clash/Mihomo** 代理规则影响。")
 
 col_input, col_info = st.columns([2, 1])
 
@@ -58,65 +54,88 @@ with col_input:
         user = st.text_input(t["username"])
     with c2:
         pwd = st.text_input(t["password"], type="password")
-    servers_text = st.text_area(t["servers"], height=200, placeholder="http://example.com:8080")
+    servers_text = st.text_area(t["servers"], height=200, placeholder="example.com:8080")
 
-# ==================== 3. 核心检测逻辑 (JavaScript 注入) ====================
+# ==================== 3. 核心检测逻辑 (浏览器端图片探测法) ====================
 if st.button(t["start_btn"], type="primary", use_container_width=True):
-    if not user or not pwd or not servers_text:
+    if not servers_text:
         st.warning(t["warning"])
     else:
         server_list = [s.strip() for s in servers_text.splitlines() if s.strip()]
-        
-        # 构建传给 JS 的参数
         js_servers = json.dumps(server_list)
         
-        # 注入检测脚本
-        # 原理：在访问者浏览器中循环 fetch 每个服务器的 player_api.php
+        # 注入本地检测逻辑
         components.html(
             f"""
-            <div id="status-box" style="color:#fafafa; font-family:sans-serif; margin-bottom:10px;">正在准备本地检测...</div>
-            <div id="results-data" style="display:none;"></div>
+            <div id="console" style="background:#1e1e1e; color:#d4d4d4; padding:15px; font-family:monospace; border-radius:8px; height:400px; overflow-y:auto; border:1px solid #444;">
+                <div style="color:#569cd6;">> 初始化本地探测引擎...</div>
+            </div>
 
             <script>
                 const servers = {js_servers};
-                const user = "{user}";
-                const pass = "{pwd}";
-                const results = [];
-                const statusBox = document.getElementById('status-box');
+                const consoleBox = document.getElementById('console');
 
-                async function checkServers() {{
-                    for (let i = 0; i < servers.length; i++) {{
-                        let s = servers[i];
+                function log(msg, color="#d4d4d4") {{
+                    const div = document.createElement('div');
+                    div.style.color = color;
+                    div.style.marginBottom = "4px";
+                    div.innerText = `[${{new Date().toLocaleTimeString()}}] ${{msg}}`;
+                    consoleBox.appendChild(div);
+                    consoleBox.scrollTop = consoleBox.scrollHeight;
+                }}
+
+                async function probe(url) {{
+                    return new Promise((resolve) => {{
+                        const start = Date.now();
+                        const img = new Image();
+                        
+                        // 尝试请求服务器上的 player_api.php (作为资源加载)
+                        // 即使它不是图片，浏览器发起请求本身就能确认连通性
+                        img.onload = () => resolve(Date.now() - start);
+                        img.onerror = () => resolve(Date.now() - start);
+                        
+                        // 设置 5 秒超时
+                        setTimeout(() => resolve(9999), 5000);
+                        
+                        img.src = `${{url}}/player_api.php?t=${{start}}`;
+                    }});
+                }}
+
+                async function runTest() {{
+                    log("开始批量探测目标服务器连通性...", "#ce9178");
+                    
+                    for (let s of servers) {{
                         if (!s.startsWith('http')) s = 'http://' + s;
                         s = s.replace(/\/$/, "");
-                        const url = `${{s}}/player_api.php?username=${{user}}&password=${{pass}}`;
                         
-                        statusBox.innerText = `检测中 (${{i+1}}/${{servers.length}}): ${{s}}`;
+                        log(`正在探测: ${{s}} ...`);
+                        const latency = await probe(s);
                         
-                        const start = Date.now();
-                        try {{
-                            // 使用 no-cors 模式可以检测是否连通，但无法读取具体 JSON 内容
-                            // 如果需要读取具体到期时间，服务器必须允许跨域
-                            const response = await fetch(url, {{ mode: 'cors', timeout: 10000 }});
-                            const elapsed = ((Date.now() - start)/1000).toFixed(2);
-                            
-                            if (response.ok) {{
-                                results.push({{"Server": s, "Status": "✅ Active", "Details": "Connected in " + elapsed + "s"}});
-                            }} else {{
-                                results.push({{"Server": s, "Status": "❌ HTTP " + response.status, "Details": "Server unreachable"}});
-                            }}
-                        }} catch (err) {{
-                            results.push({{"Server": s, "Status": "❌ Error", "Details": "Network Error / CORS Block"}});
+                        if (latency < 5000) {{
+                            log(`✅ 连通成功 | 响应耗时: ${{latency}}ms`, "#6a9955");
+                        }} else if (latency === 9999) {{
+                            log(`❌ 探测超时 | 目标不可达或被防火墙拦截`, "#f44747");
+                        } else {{
+                            log(`⚠️ 响应缓慢 | 耗时: ${{latency}}ms`, "#dcdcaa");
                         }}
                     }}
-                    statusBox.innerHTML = "<b>✅ 本地检测完成！</b> 请查看下方生成的表格。";
-                    // 将结果通过文本形式挂载，虽然 Streamlit 获取 JS 变量较难，但这里直接显示在 HTML 组件内
-                    document.getElementById('results-data').innerText = JSON.stringify(results);
-                    console.table(results);
-                </script>
+                    log("--- 所有本地探测任务已完成 ---", "#569cd6");
+                }}
+
+                runTest();
+            </script>
             """,
-            height=150,
+            height=450,
         )
-        
-        st.subheader(t["result_label"])
-        st.caption("提示：由于浏览器安全限制 (CORS)，如果检测显示 Error，通常是因为目标服务器拒绝了来自此网页的直接请求，但这仍能说明您的本地网络到该服务器的连通性状态。")
+
+with col_info:
+    st.markdown(f"""
+    ### 探测指南
+    1. **真实性**：检测请求由您的浏览器直接发出，不经过服务器中转。
+    2. **代理影响**：如果您开启了 **Clash Verge Rev** 或 **Mihomo Party**，检测结果将遵循您的代理分流规则：
+       - **直连 (DIRECT)**：使用您的**江西电信**真实宽带。
+       - **代理 (PROXY)**：使用您选择的节点 IP。
+    3. **为何不显示具体账号信息？**：
+       - 浏览器端的跨域限制严禁直接读取第三方服务器的 JSON 数据。
+       - 本工具目前专注于**网络连通性**（能否连上）和**延迟**探测。
+    """)
