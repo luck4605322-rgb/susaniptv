@@ -1,141 +1,123 @@
 import streamlit as st
-import pandas as pd
 import streamlit.components.v1 as components
 import json
 
-# ==================== 1. 多国语言字典 ====================
+# ==================== 1. 页面配置与多国语言 ====================
+st.set_page_config(page_title="IPTV Local Tester", layout="wide", page_icon="📺")
+
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTV 访问者本地网络检测工具 v1.8",
-        "username": "用户名", "password": "密码", "servers": "服务器地址（一行一个）",
-        "start_btn": "🚀 开始本地真实网络检测", "result_label": "实时检测状态",
-        "warning": "请填写完整信息！", "your_ip": "您的公网 IP"
+        "title": "IPTV 客户端本地检测工具 v1.9",
+        "username": "用户名", "password": "密码",
+        "servers": "服务器地址（一行一个，不带 http://）",
+        "start_btn": "🚀 开始本地真实网络检测",
+        "your_ip": "您的访问 IP"
     },
     "English": {
-        "title": "IPTV Visitor Local Network Tester v1.8",
-        "username": "Username", "password": "Password", "servers": "Servers (one per line)",
-        "start_btn": "🚀 Start Local Network Test", "result_label": "Live Status",
-        "warning": "Please fill in all fields!", "your_ip": "Your Public IP"
+        "title": "IPTV Local Network Tester v1.9",
+        "username": "Username", "password": "Password",
+        "servers": "Servers (one per line, without http://)",
+        "start_btn": "🚀 Start Local Test",
+        "your_ip": "Your IP"
     }
 }
 
-# ==================== 2. 页面配置 ====================
-st.set_page_config(page_title="IPTV Local Tester", layout="wide", page_icon="📺")
-
-# 侧边栏配置
+# 侧边栏
 st.sidebar.title("Settings / 设定")
 lang_choice = st.sidebar.selectbox("Language / 语言", list(LANGUAGES.keys()))
 t = LANGUAGES[lang_choice]
 
-st.sidebar.markdown("---")
-st.sidebar.subheader(t["your_ip"])
-
-# 获取访问者 IP (由浏览器执行)
-components.html(
-    """
-    <div id="ip-display" style="background:#0e1117; color:#00ff00; padding:8px; border-radius:5px; border:1px solid #31333f; font-family:monospace; font-size:14px;">Detecting...</div>
-    <script>
-        fetch('https://api.ipify.org?format=json').then(r => r.json())
-        .then(d => { document.getElementById('ip-display').innerText = d.ip; })
-        .catch(() => { document.getElementById('ip-display').innerText = 'Check Proxy/Network'; });
-    </script>
-    """, height=60
-)
-
-# 主界面
+# ==================== 2. 主界面布局 ====================
 st.title(t["title"])
-st.info("💡 **原理**：此工具通过您的浏览器发起探测。检测结果受您本地 **Windows 11** 环境及 **Clash/Mihomo** 代理规则影响。")
+st.markdown("---")
 
-col_input, col_info = st.columns([2, 1])
+col_input, col_info = st.columns([1, 1])
 
 with col_input:
-    c1, c2 = st.columns(2)
-    with c1:
-        user = st.text_input(t["username"])
-    with c2:
-        pwd = st.text_input(t["password"], type="password")
+    user = st.text_input(t["username"], key="user")
+    pwd = st.text_input(t["password"], type="password", key="pass")
     servers_text = st.text_area(t["servers"], height=200, placeholder="example.com:8080")
 
-# ==================== 3. 核心检测逻辑 (浏览器端图片探测法) ====================
+with col_info:
+    st.info("""
+    **运行说明：**
+    1. 探测请求由您的**浏览器直接发出**，反映您当前的真实网络。
+    2. 检测结果会经过您的 **Windows 11** 系统代理（如 **Clash Verge Rev** 或 **Mihomo Party**）。
+    3. 如果在 **1Panel** 环境下部署，请确保容器映射了正确的端口。
+    """)
+
+# ==================== 3. 核心探测组件 (JavaScript) ====================
 if st.button(t["start_btn"], type="primary", use_container_width=True):
     if not servers_text:
-        st.warning(t["warning"])
+        st.warning("请先输入服务器地址！")
     else:
+        # 处理服务器列表
         server_list = [s.strip() for s in servers_text.splitlines() if s.strip()]
         js_servers = json.dumps(server_list)
         
-        # 注入本地检测逻辑
+        # 注入 HTML/JS 组件
         components.html(
             f"""
-            <div id="console" style="background:#1e1e1e; color:#d4d4d4; padding:15px; font-family:monospace; border-radius:8px; height:400px; overflow-y:auto; border:1px solid #444;">
-                <div style="color:#569cd6;">> 初始化本地探测引擎...</div>
+            <div id="root" style="background:#1e1e1e; color:#d4d4d4; padding:20px; font-family:Consolas, monospace; border-radius:10px; border:1px solid #333;">
+                <div id="ip-header" style="color:#569cd6; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
+                    正在获取本地公网 IP...
+                </div>
+                <div id="console" style="height:300px; overflow-y:auto; font-size:13px; line-height:1.6;">
+                    > 等待指令...
+                </div>
             </div>
 
             <script>
                 const servers = {js_servers};
                 const consoleBox = document.getElementById('console');
+                const ipHeader = document.getElementById('ip-header');
 
                 function log(msg, color="#d4d4d4") {{
                     const div = document.createElement('div');
                     div.style.color = color;
-                    div.style.marginBottom = "4px";
-                    div.innerText = `[${{new Date().toLocaleTimeString()}}] ${{msg}}`;
+                    div.innerHTML = `[${{new Date().toLocaleTimeString()}}] ${{msg}}`;
                     consoleBox.appendChild(div);
                     consoleBox.scrollTop = consoleBox.scrollHeight;
                 }}
 
-                async function probe(url) {{
-                    return new Promise((resolve) => {{
-                        const start = Date.now();
-                        const img = new Image();
-                        
-                        // 尝试请求服务器上的 player_api.php (作为资源加载)
-                        // 即使它不是图片，浏览器发起请求本身就能确认连通性
-                        img.onload = () => resolve(Date.now() - start);
-                        img.onerror = () => resolve(Date.now() - start);
-                        
-                        // 设置 5 秒超时
-                        setTimeout(() => resolve(9999), 5000);
-                        
-                        img.src = `${{url}}/player_api.php?t=${{start}}`;
-                    }});
+                // 1. 获取真实公网 IP
+                fetch('https://api.ipify.org?format=json')
+                    .then(r => r.json())
+                    .then(d => {{ ipHeader.innerText = "您的当前出口 IP: " + d.ip; }})
+                    .catch(() => {{ ipHeader.innerText = "IP 获取失败 (请检查代理规则)"; }});
+
+                // 2. 探测函数 (使用 fetch no-cors 模式绕过安全限制)
+                async function check(url) {{
+                    const fullUrl = url.startsWith('http') ? url : 'http://' + url;
+                    const target = `${{fullUrl}}/player_api.php`;
+                    const start = Date.now();
+                    
+                    try {{
+                        // no-cors 允许浏览器发出请求并接收“不透明”响应，足以判断网络连通性
+                        await fetch(target, {{ mode: 'no-cors', cache: 'no-cache' }});
+                        const duration = Date.now() - start;
+                        return {{ success: true, time: duration }};
+                    }} catch (e) {{
+                        return {{ success: false, time: Date.now() - start }};
+                    }}
                 }}
 
-                async function runTest() {{
-                    log("开始批量探测目标服务器连通性...", "#ce9178");
-                    
-                    for (let s of servers) {{
-                        if (!s.startsWith('http')) s = 'http://' + s;
-                        s = s.replace(/\/$/, "");
-                        
-                        log(`正在探测: ${{s}} ...`);
-                        const latency = await probe(s);
-                        
-                        if (latency < 5000) {{
-                            log(`✅ 连通成功 | 响应耗时: ${{latency}}ms`, "#6a9955");
-                        }} else if (latency === 9999) {{
-                            log(`❌ 探测超时 | 目标不可达或被防火墙拦截`, "#f44747");
-                        } else {{
-                            log(`⚠️ 响应缓慢 | 耗时: ${{latency}}ms`, "#dcdcaa");
+                async function startTask() {{
+                    log("开始检测本地网络到目标服务器的连通性...", "#ce9178");
+                    for (const s of servers) {{
+                        log(`正在探测: ${{s}}`);
+                        const result = await check(s);
+                        if (result.success) {{
+                            log(`✅ 连通成功 | 响应延迟: ${{result.time}}ms`, "#6a9955");
+                        }} else {{
+                            log(`❌ 无法访问 | 请检查该地址或您的代理分流`, "#f44747");
                         }}
                     }}
-                    log("--- 所有本地探测任务已完成 ---", "#569cd6");
+                    log("检测任务结束。", "#569cd6");
                 }}
 
-                runTest();
+                setTimeout(startTask, 500);
             </script>
             """,
-            height=450,
+            height=500,
         )
-
-with col_info:
-    st.markdown(f"""
-    ### 探测指南
-    1. **真实性**：检测请求由您的浏览器直接发出，不经过服务器中转。
-    2. **代理影响**：如果您开启了 **Clash Verge Rev** 或 **Mihomo Party**，检测结果将遵循您的代理分流规则：
-       - **直连 (DIRECT)**：使用您的**江西电信**真实宽带。
-       - **代理 (PROXY)**：使用您选择的节点 IP。
-    3. **为何不显示具体账号信息？**：
-       - 浏览器端的跨域限制严禁直接读取第三方服务器的 JSON 数据。
-       - 本工具目前专注于**网络连通性**（能否连上）和**延迟**探测。
-    """)
