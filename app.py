@@ -1,249 +1,199 @@
 import streamlit as st
 import json
 
-# ==================== 1. 多语言字典（v2.1） ====================
+# ==================== 多语言字典 v3.0 ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTVNator 网页批量检测工具 v2.1（客户端真实检测）--作者 susan",
+        "title": "IPTVNator 批量检测工具 v3.0（客户端检测优化）--作者 susan",
         "username": "用户名", "password": "密码", "servers": "服务器地址（一行一个）",
-        "start_btn": "🚀 开始批量检测（使用您的本地网络）", 
+        "start_btn": "🚀 开始批量检测（浏览器本地网络）",
         "result_label": "检测结果", "warning": "请填写完整信息！",
         "header_server": "服务器", "header_status": "状态", "header_info": "详细信息",
-        "your_ip": "您的公网 IP（客户端本地）", "testing": "正在测试中...", "done": "检测完成！",
-        "note": "检测完全在您的浏览器中执行，使用您的本地网络和IP。GitHub服务器仅提供页面。"
+        "your_ip": "您的公网 IP（浏览器检测）",
+        "done": "检测完成！",
+        "note": "⚠️ 注意：由于大多数 IPTV 服务器未开启 CORS，部分结果可能仅能判断网络可达性。真实性受浏览器限制。建议结合本地测试验证关键服务器。"
     },
     "English": {
-        "title": "IPTVNator Web Tester v2.1 (Client-side Real Test) -- Author susan",
+        "title": "IPTVNator Batch Tester v3.0 (Client-side Optimized) -- Author susan",
         "username": "Username", "password": "Password", "servers": "Server Addresses (one per line)",
-        "start_btn": "🚀 Start Batch Test (Using Your Local Network)", 
+        "start_btn": "🚀 Start Batch Test (Browser Local Network)",
         "result_label": "Test Results", "warning": "Please fill in all fields!",
         "header_server": "Server", "header_status": "Status", "header_info": "Details",
-        "your_ip": "Your Public IP (Client-side)", "testing": "Testing in progress...", "done": "Test Completed!",
-        "note": "All tests are executed directly from your browser using your local network and IP."
-    },
-    # 其他语言可按需补充，结构保持一致
+        "your_ip": "Your Public IP (Browser)",
+        "done": "Test Completed!",
+        "note": "⚠️ Note: Due to CORS restrictions on most IPTV servers, some results can only indicate network reachability. For critical servers, verify with local Python requests."
+    }
 }
 
-st.set_page_config(page_title="IPTV Batch Tester", layout="wide", page_icon="📺")
+st.set_page_config(page_title="IPTV Tester v3.0", layout="wide", page_icon="📺")
 
-lang_choice = st.sidebar.selectbox("🌐 Language / 语言", list(LANGUAGES.keys()))
+lang_choice = st.sidebar.selectbox("🌐 Language", list(LANGUAGES.keys()))
 t = LANGUAGES[lang_choice]
 
 st.title(t["title"])
 st.markdown("---")
 
-# 侧边栏客户端 IP
-st.sidebar.title("Settings")
 st.sidebar.subheader(t["your_ip"])
 ip_placeholder = st.sidebar.empty()
 
-col_input, col_info = st.columns([2, 1])
+col1, col2 = st.columns([2, 1])
 
-with col_input:
+with col1:
     c1, c2 = st.columns(2)
     with c1:
-        user = st.text_input(t["username"], placeholder="username")
+        username = st.text_input(t["username"])
     with c2:
-        pwd = st.text_input(t["password"], type="password", placeholder="password")
-    
-    servers_text = st.text_area(t["servers"], height=280, 
-                                placeholder="http://example.com:8080\nhttps://iptv.example.net:25461")
+        password = st.text_input(t["password"], type="password")
+    servers_text = st.text_area(t["servers"], height=250, placeholder="http://yourserver.com:8080\nhttps://another.com:25461")
 
-with col_info:
-    st.info(f"""
-    **关键改进（v2.1）：**
-    - 请求**从您的浏览器直接发出**，使用您的本地网络/IP进行真实检测
-    - 改进状态判断逻辑（尝试解析返回内容）
-    - 支持部分 CORS 受限服务器的回退检测
-    - 推荐使用 Chrome / Edge / Firefox 最新版
+with col2:
+    st.info("""
+    **v3.0 主要优化：**
+    - 改进状态判断逻辑（尝试读取响应文本）
+    - 区分网络错误、HTTP 错误、登录失败
+    - 更清晰的颜色标记和超时处理
+    - 客户端 IP 多源获取
     """)
 
 if st.button(t["start_btn"], type="primary", use_container_width=True):
-    if not user or not pwd or not servers_text.strip():
-        st.warning(t["warning"])
+    if not username or not password or not servers_text.strip():
+        st.error(t["warning"])
         st.stop()
 
-    servers = [s.strip() for s in servers_text.splitlines() if s.strip()]
-    if not servers:
-        st.warning("请输入至少一个有效的服务器地址！")
-        st.stop()
+    servers = [line.strip() for line in servers_text.splitlines() if line.strip()]
+    
+    progress = st.progress(0)
+    status_text = st.empty()
+    result_area = st.empty()
 
-    progress_bar = st.progress(0)
-    status_msg = st.empty()
-    result_container = st.empty()
-
-    # ==================== 客户端 JS 检测核心逻辑（v2.1 优化版） ====================
     html_code = f"""
     <style>
-        table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
-        th, td {{ padding: 12px; text-align: left; border: 1px solid #ddd; }}
-        th {{ background: #f0f2f6; }}
-        .success {{ color: #0f9d58; font-weight: bold; }}
-        .error {{ color: #d93025; font-weight: bold; }}
-        .warning {{ color: #f4b400; }}
+        .table {{ width:100%; border-collapse:collapse; margin:15px 0; }}
+        th, td {{ padding:10px; border:1px solid #ddd; text-align:left; }}
+        th {{ background:#f0f2f6; }}
+        .active {{ color:#0b8a3d; font-weight:bold; }}
+        .failed {{ color:#d32f2f; font-weight:bold; }}
+        .warning {{ color:#f57c00; }}
+        .info {{ color:#1976d2; }}
     </style>
-    <div id="results"></div>
+    <div id="result_table"></div>
 
     <script>
-        const username = "{user}";
-        const password = "{pwd}";
-        const servers = {json.dumps(servers)};
-        const total = servers.length;
-        let completed = 0;
-        let results = [];
+    const username = "{username}";
+    const password = "{password}";
+    const servers = {json.dumps(servers)};
 
-        async function testSingleServer(serverUrl) {{
-            let server = serverUrl.trim();
-            if (!server.startsWith("http")) server = "http://" + server;
-            server = server.replace(/\/$/, "");
-            const baseUrl = `${{server}}/player_api.php?username=${{username}}&password=${{password}}`;
-            const startTime = Date.now();
+    let results = [];
+    let completed = 0;
 
-            try {{
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 12000);
+    async function testServer(server) {{
+        let url = server.trim();
+        if (!url.startsWith('http')) url = 'http://' + url;
+        url = url.replace(/\/$/, '');
+        const apiUrl = `${{url}}/player_api.php?username=${{username}}&password=${{password}}`;
+        const start = Date.now();
 
-                const response = await fetch(baseUrl, {{
-                    method: 'GET',
-                    headers: {{ 
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
-                    }},
-                    signal: controller.signal,
-                    // mode: 'cors' 默认模式，尝试读取响应
-                }});
+        try {{
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), 15000);
 
-                clearTimeout(timeout);
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+            const resp = await fetch(apiUrl, {{
+                method: 'GET',
+                headers: {{ 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }},
+                signal: controller.signal
+            }});
 
-                let statusText = "❌ Unknown";
-                let details = `Time: ${{elapsed}}s`;
+            const timeTaken = ((Date.now() - start)/1000).toFixed(2);
 
-                if (response.ok) {{
-                    try {{
-                        const text = await response.text();
-                        if (text.includes("user_info") || text.includes("status") || text.includes("Active")) {{
-                            statusText = "✅ Active";
-                            // 尝试简单提取过期时间（粗略）
-                            const expMatch = text.match(/exp_date["']?\\s*[:=]\\s*["']?(\\d+)/);
-                            if (expMatch) {{
-                                const exp = new Date(parseInt(expMatch[1]) * 1000);
-                                details += ` | Exp: ${{exp.toISOString().split('T')[0]}}`;
-                            }}
-                        }} else {{
-                            statusText = "⚠️ Reachable but Login Failed";
+            let status = "❌ Unknown";
+            let details = `Time: ${{timeTaken}}s`;
+
+            if (resp.ok) {{
+                try {{
+                    const text = await resp.text();
+                    if (text.includes('"user_info"') || text.includes('status') || text.includes('Active')) {{
+                        status = "✅ Active";
+                        // 粗略尝试提取 exp_date
+                        const match = text.match(/"exp_date"\\s*:\\s*["']?(\\d+)/);
+                        if (match) {{
+                            const exp = new Date(parseInt(match[1]) * 1000);
+                            details += ` | Exp: ${{exp.getFullYear()}-${{String(exp.getMonth()+1).padStart(2,'0')}}-${{String(exp.getDate()).padStart(2,'0')}}`;
                         }}
-                    }} catch(e) {{
-                        statusText = "✅ Reachable (JSON parse failed)";
+                    }} else {{
+                        status = "⚠️ Reachable - Login Failed";
                     }}
-                }} else {{
-                    statusText = `❌ HTTP ${{response.status}}`;
+                }} catch(e) {{
+                    status = "✅ Reachable (content unreadable)";
                 }}
-
-                results.push({{
-                    Server: server,
-                    Status: statusText,
-                    Details: details
-                }});
-
-            }} catch (err) {{
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-                let statusText = "❌ Unreachable";
-                if (err.name === "AbortError") statusText = "❌ Timeout (12s)";
-                else if (err.message.includes("Failed to fetch") || err.message.includes("CORS")) {{
-                    statusText = "❌ Network Error / CORS Blocked";
-                }}
-
-                results.push({{
-                    Server: server,
-                    Status: statusText,
-                    Details: `Error: ${{err.message || 'Connection failed'}} | ${{elapsed}}s`
-                }});
+            }} else {{
+                status = `❌ HTTP ${{resp.status}}`;
             }}
 
-            completed++;
-            const progress = Math.round((completed / total) * 100);
-            renderTable();
-
-            // 更新 Streamlit 侧进度（通过 console，实际以 JS 表格为主）
-            console.log(`Progress: ${{progress}}% - ${{completed}}/${{total}}`);
+            results.push({{Server: url, Status: status, Details: details}});
+        }} catch (e) {{
+            const timeTaken = ((Date.now() - start)/1000).toFixed(2);
+            let status = "❌ Unreachable";
+            if (e.name === "AbortError") status = "❌ Timeout (>15s)";
+            else if (e.message.includes("CORS") || e.message.includes("Failed to fetch")) {{
+                status = "❌ CORS Blocked / Network Error";
+            }}
+            results.push({{Server: url, Status: status, Details: `Error: ${{e.message || 'Connection failed'}} | ${{timeTaken}}s`}});
         }}
 
-        function renderTable() {{
-            let html = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>${t["header_server"]}</th>
-                            <th>${t["header_status"]}</th>
-                            <th>${t["header_info"]}</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
-            
-            results.forEach(r => {{
-                const cls = r.Status.includes("✅") ? "success" : (r.Status.includes("⚠️") ? "warning" : "error");
-                html += `
-                    <tr>
-                        <td>${{r.Server}}</td>
-                        <td class="${{cls}}">${{r.Status}}</td>
-                        <td>${{r.Details}}</td>
-                    </tr>`;
-            }});
-            
-            html += `</tbody></table>`;
-            document.getElementById("results").innerHTML = html;
-        }}
-
-        // 执行所有测试
-        Promise.allSettled(servers.map(s => testSingleServer(s))).then(() => {{
-            console.log("{t['done']}");
-        }});
-
-        // 初始空表
+        completed++;
+        progress = Math.round((completed / servers.length) * 100);
         renderTable();
+    }}
+
+    function renderTable() {{
+        let html = `<table class="table"><thead><tr><th>${t["header_server"]}</th><th>${t["header_status"]}</th><th>${t["header_info"]}</th></tr></thead><tbody>`;
+        results.forEach(r => {{
+            let cls = r.Status.includes("✅") ? "active" : (r.Status.includes("⚠️") ? "warning" : "failed");
+            html += `<tr><td>${{r.Server}}</td><td class="${{cls}}">${{r.Status}}</td><td>${{r.Details}}</td></tr>`;
+        }});
+        html += `</tbody></table>`;
+        document.getElementById("result_table").innerHTML = html;
+    }}
+
+    // 并行执行（浏览器会自动限流）
+    Promise.allSettled(servers.map(testServer)).then(() => {{
+        console.log("检测完成");
+    }});
+
+    renderTable(); // 初始表格
     </script>
     """
 
-    with result_container:
+    with result_area:
         st.subheader(t["result_label"])
-        st.components.v1.html(html_code, height=650, scrolling=True)
+        st.components.v1.html(html_code, height=700, scrolling=True)
 
     st.success(t["done"])
     st.caption(t["note"])
 
-# ==================== 客户端公网 IP 获取（多备用源，提高成功率） ====================
-ip_script = """
+# 客户端 IP 显示（多源）
+ip_js = """
 <script>
-async function getClientIP() {
-    const services = [
-        'https://api.ipify.org?format=json',
-        'https://api64.ipify.org?format=json',
-        'https://ipinfo.io/json',
-        'https://ifconfig.me/ip'
-    ];
-    
-    for (let url of services) {
+async function fetchIP() {
+    const urls = ['https://api.ipify.org?format=json', 'https://api64.ipify.org?format=json', 'https://ifconfig.me/ip'];
+    for (let u of urls) {
         try {
-            const res = await fetch(url, {mode: 'cors', timeout: 5000});
-            if (res.ok) {
-                const data = await res.json();
-                const ip = data.ip || data;
-                document.getElementById('client-ip').innerHTML = 
-                    `<code style="background:#f0f2f6; padding:8px; border-radius:4px; font-size:1.1em;">${ip}</code>`;
+            let r = await fetch(u);
+            if (r.ok) {
+                let data = await r.text();
+                let ip = data.trim().replace(/\\n/g, '');
+                document.getElementById('clientip').innerHTML = `<code style="font-size:1.1em;">${ip}</code>`;
                 return;
             }
-        } catch(e) {}
+        } catch(e){}
     }
-    document.getElementById('client-ip').innerHTML = 
-        `<span style="color:#666;">Unable to detect / 无法获取</span>`;
+    document.getElementById('clientip').innerHTML = '无法获取';
 }
-
-getClientIP();
+fetchIP();
 </script>
-<div id="client-ip" style="font-family: monospace; padding: 10px; background: #f8f9fa; border-radius: 6px; margin-top: 8px;"></div>
+<div id="clientip" style="background:#f0f2f6; padding:10px; border-radius:6px; font-family:monospace;"></div>
 """
+ip_placeholder.markdown("**Detected:**")
+st.components.v1.html(ip_js, height=70)
 
-ip_placeholder.markdown("**Detected Client IP:**")
-st.components.v1.html(ip_script, height=80)
-
-st.caption("**说明**：本次检测请求全部来自**您的浏览器本地网络**，不再经过 GitHub 服务器的网络。状态判断已优化，但极少数严格限制 CORS 的服务器仍可能只显示 'Network Error' —— 此时建议用本地 Python requests 测试验证。")
+st.caption("**重要提醒**：浏览器安全策略（CORS）是当前主要限制因素。如果重要服务器结果显示 'CORS Blocked' 或 'Reachable but unreadable'，**强烈建议使用本地 Python 脚本**（requests 库）进行最终验证。")
