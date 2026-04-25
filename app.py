@@ -2,7 +2,7 @@ import streamlit as st
 import time
 import pandas as pd
 
-# ==================== 1. 多语言字典（v1.8.1 已修复所有重音符问题） ====================
+# ==================== 1. 多语言字典（v1.8.1 完整版，已修复所有语法问题） ====================
 LANGUAGES = {
     "简体中文": {
         "title": "IPTVNator 网页批量检测工具 v1.8.1（客户端检测）--作者susan, WhatsApp: +8615573857383",
@@ -114,7 +114,7 @@ LANGUAGES = {
 # ==================== 2. Streamlit 配置 ====================
 st.set_page_config(page_title="IPTVNator Client Tester v1.8.1", layout="wide", page_icon="📺")
 
-lang_choice = st.sidebar.selectbox("🌐 Language / 语言 / Idioma / Langue", list(LANGUAGES.keys()))
+lang_choice = st.sidebar.selectbox("🌐 Language / 语言 / Idioma", list(LANGUAGES.keys()))
 t = LANGUAGES[lang_choice]
 
 st.title(t["title"])
@@ -133,7 +133,7 @@ current_ip = get_public_ip()
 
 st.sidebar.subheader(t["your_ip"])
 st.sidebar.code(current_ip, language="bash")
-st.sidebar.caption(t.get("client_note", "Detection runs from your browser"))
+st.sidebar.caption(t.get("client_note", "检测从客户端浏览器发起"))
 
 # ==================== 3. 输入区域 ====================
 col_input, col_info = st.columns([2, 1])
@@ -145,19 +145,19 @@ with col_input:
     with c2:
         password = st.text_input(t["password"], type="password")
     
-    servers_text = st.text_area(t["servers"], height=250, 
-                                placeholder="http://example.com:8080\nhttps://iptv.example.com\nhttp://test.iptv.com:25461")
+    servers_text = st.text_area(t["servers"], height=250,
+                                placeholder="http://example.com:8080\nhttps://iptv.example.com")
 
 with col_info:
     st.info(f"""
     **💡 Important Tips / 重要提示:**
-    - All tests run **directly from your browser** using your real local network
-    - 支持 HTTP & HTTPS
-    - Recommended: ≤ 50 servers at a time
+    - 检测将**从您的浏览器直接发起**，使用您本地的真实网络
+    - 支持 HTTP/HTTPS，自动添加 http:// 前缀
+    - 推荐一次不要超过 50 个服务器
     - WhatsApp: **+8615573857383**
     """)
 
-# ==================== 4. 客户端 JavaScript 检测核心 ====================
+# ==================== 4. 核心：JavaScript 客户端检测 ====================
 if st.button(t["start_btn"], type="primary", use_container_width=True):
     if not username or not password or not servers_text.strip():
         st.error(t["warning"])
@@ -168,11 +168,15 @@ if st.button(t["start_btn"], type="primary", use_container_width=True):
             st.error("没有有效的服务器地址！" if lang_choice == "简体中文" else "No valid server addresses!")
             st.stop()
 
+        # 安全的 JS 代码（对引号进行转义）
+        safe_username = username.replace('"', '\\"').replace("'", "\\'")
+        safe_password = password.replace('"', '\\"').replace("'", "\\'")
+
         js_code = f"""
         <script>
         async function testIPTV() {{
-            const username = "{username.replace('"', '\\"')}";
-            const password = "{password.replace('"', '\\"')}";
+            const username = "{safe_username}";
+            const password = "{safe_password}";
             const servers = {servers};
             
             const results = [];
@@ -182,7 +186,7 @@ if st.button(t["start_btn"], type="primary", use_container_width=True):
                 <div style="width:100%; background:#333; height:25px; border-radius:12px; overflow:hidden; margin:15px 0;">
                     <div id="bar" style="width:0%; height:100%; background:linear-gradient(90deg, #00ff88, #00cc66); transition:width 0.4s ease;"></div>
                 </div>
-                <p id="status" style="font-family:monospace; text-align:center; color:#0f0;"></p>
+                <p id="status" style="font-family:monospace; text-align:center;"></p>
             `;
             document.body.appendChild(progressContainer);
 
@@ -190,7 +194,7 @@ if st.button(t["start_btn"], type="primary", use_container_width=True):
             const statusEl = document.getElementById('status');
 
             for (let i = 0; i < servers.length; i++) {{
-                let server = servers[i].trim();
+                let server = servers[i];
                 if (!server.startsWith('http')) server = 'http://' + server;
                 server = server.replace(/\\/$/, '');
 
@@ -199,28 +203,27 @@ if st.button(t["start_btn"], type="primary", use_container_width=True):
 
                 try {{
                     const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 12000);
+                    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
                     const resp = await fetch(baseUrl, {{
                         method: 'GET',
                         headers: {{ 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }},
-                        signal: controller.signal,
-                        mode: 'cors'
+                        signal: controller.signal
                     }});
 
-                    clearTimeout(timeout);
+                    clearTimeout(timeoutId);
                     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
                     let statusText = '❌ Fail';
-                    let detail = `Unknown | ${{elapsed}}s`;
+                    let detail = '';
 
                     if (resp.ok) {{
                         try {{
                             const data = await resp.json();
-                            if (data && data.user_info) {{
+                            if (data.user_info) {{
                                 const ui = data.user_info;
                                 const exp = ui.exp_date;
-                                const expDate = (exp && !isNaN(parseInt(exp))) 
+                                const expDate = exp && !isNaN(parseInt(exp)) 
                                     ? new Date(parseInt(exp) * 1000).toISOString().split('T')[0] 
                                     : 'Never';
                                 detail = `Status: ${{ui.status || 'Active'}} | Exp: ${{expDate}} | ${{elapsed}}s`;
@@ -237,42 +240,40 @@ if st.button(t["start_btn"], type="primary", use_container_width=True):
                     results.push({{Server: server, Status: statusText, Details: detail}});
                 }} catch (err) {{
                     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-                    const msg = err.name === 'AbortError' ? 'Timeout' : 'Unreachable';
+                    let msg = err.name === 'AbortError' ? 'Timeout' : 'Error/Unreachable';
                     results.push({{Server: server, Status: '❌ Error', Details: `${{msg}} | ${{elapsed}}s`}});
                 }}
 
                 const percent = Math.round(((i + 1) / servers.length) * 100);
                 bar.style.width = percent + '%';
-                statusEl.textContent = `Testing: ${{i+1}}/${{servers.length}}   (${{percent}}%)`;
+                statusEl.textContent = `Testing: ${{i+1}}/${{servers.length}}  (${{percent}}%)`;
             }}
 
-            // 生成结果表格
             let html = `
                 <h3 style="margin-top:30px;">${t["result_label"]}</h3>
-                <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:14px;">
+                <table style="width:100%; border-collapse:collapse; margin-top:15px; font-size:14px;">
                     <thead>
-                        <tr style="background:#1f1f1f;">
-                            <th style="padding:12px; border:1px solid #555; text-align:left;">${t["header_server"]}</th>
-                            <th style="padding:12px; border:1px solid #555; text-align:left;">${t["header_status"]}</th>
-                            <th style="padding:12px; border:1px solid #555; text-align:left;">${t["header_info"]}</th>
+                        <tr style="background:#1e1e1e;">
+                            <th style="padding:12px; border:1px solid #444; text-align:left;">${t["header_server"]}</th>
+                            <th style="padding:12px; border:1px solid #444; text-align:left;">${t["header_status"]}</th>
+                            <th style="padding:12px; border:1px solid #444; text-align:left;">${t["header_info"]}</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
             results.forEach(r => {{
-                const color = r.Status.includes('✅') ? '#00ff88' : '#ff5555';
+                const color = r.Status.includes('✅') ? '#00ff00' : '#ff4444';
                 html += `
                     <tr>
-                        <td style="padding:10px; border:1px solid #555;">${r.Server}</td>
-                        <td style="padding:10px; border:1px solid #555; color:${color}; font-weight:bold;">${r.Status}</td>
-                        <td style="padding:10px; border:1px solid #555; font-family:monospace;">${r.Details}</td>
+                        <td style="padding:10px; border:1px solid #444;">${r.Server}</td>
+                        <td style="padding:10px; border:1px solid #444; color:${color}; font-weight:bold;">${r.Status}</td>
+                        <td style="padding:10px; border:1px solid #444; font-family:monospace;">${r.Details}</td>
                     </tr>
                 `;
             }});
 
-            html += `</tbody></table><br>
-                     <p style="color:#888; text-align:center;">WhatsApp: +8615573857383</p>`;
+            html += `</tbody></table><br><p style="color:#888; text-align:center;">WhatsApp: +8615573857383</p>`;
 
             const resultDiv = document.createElement('div');
             resultDiv.innerHTML = html;
@@ -284,5 +285,5 @@ if st.button(t["start_btn"], type="primary", use_container_width=True):
         </script>
         """
 
-        st.components.v1.html(js_code, height=950, scrolling=True)
-        st.success("✅ 客户端检测已启动！所有请求均从您的本地网络发出。 WhatsApp: +8615573857383")
+        st.components.v1.html(js_code, height=900, scrolling=True)
+        st.success("✅ 客户端检测已启动！结果将直接显示在下方（由您的浏览器执行）。 WhatsApp: +8615573857383")
