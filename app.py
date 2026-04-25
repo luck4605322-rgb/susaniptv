@@ -1,123 +1,161 @@
 import streamlit as st
-import streamlit.components.v1 as components
-import json
+import requests
+import time
+import pandas as pd
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
-# ==================== 1. 页面配置与多国语言 ====================
-st.set_page_config(page_title="IPTV Local Tester", layout="wide", page_icon="📺")
-
+# ==================== 1. 多国语言字典（扩展版） ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTV 客户端本地检测工具 v1.9",
-        "username": "用户名", "password": "密码",
-        "servers": "服务器地址（一行一个，不带 http://）",
-        "start_btn": "🚀 开始本地真实网络检测",
-        "your_ip": "您的访问 IP"
+        "title": "IPTVNator 网页批量检测工具 v1.6--作者susan,whatsapp:+8615573857383",
+        "username": "用户名", "password": "密码", "servers": "服务器地址（一行一个）",
+        "start_btn": "🚀 开始批量检测", "result_label": "检测结果", "warning": "请填写完整信息！",
+        "header_server": "服务器", "header_status": "状态", "header_info": "详细信息",
+        "your_ip": "您的公网 IP"
     },
     "English": {
-        "title": "IPTV Local Network Tester v1.9",
-        "username": "Username", "password": "Password",
-        "servers": "Servers (one per line, without http://)",
-        "start_btn": "🚀 Start Local Test",
-        "your_ip": "Your IP"
+        "title": "IPTVNator Web Tester v1.6--Author susan- whatsapp:+8615573857383",
+        "username": "Username", "password": "Password", "servers": "Server Addresses (one per line)",
+        "start_btn": "🚀 Start Batch Test", "result_label": "Test Results", "warning": "Please fill in all fields!",
+        "header_server": "Server", "header_status": "Status", "header_info": "Details",
+        "your_ip": "Your Public IP"
+    },
+    "日本語": {
+        "title": "IPTVNator 一括検知ツール v1.6--Author susan- whatsapp:+8615573857383",
+        "username": "ユーザー名", "password": "パスワード", "servers": "サーバーアドレス（1行に1つ）",
+        "start_btn": "🚀 一括テスト開始", "result_label": "テスト結果", "warning": "情報をすべて入力してください！",
+        "header_server": "サーバー", "header_status": "状態", "header_info": "詳細情報",
+        "your_ip": "あなたのパブリックIP"
+    },
+    "한국어": {
+        "title": "IPTVNator 일괄 검사 도구 v1.6--Author susan-whatsapp:+8615573857383",
+        "username": "사용자 이름", "password": "비밀번호", "servers": "서버 주소 (한 줄에 하나씩)",
+        "start_btn": "🚀 일괄 테스트 시작", "result_label": "테스트 결과", "warning": "모든 정보를 입력하세요!",
+        "header_server": "서버", "header_status": "상태", "header_info": "상세 정보",
+        "your_ip": "당신의 공인 IP"
+    },
+    "Español": {
+        "title": "Probador de IPTV v1.6--Author susan-whatsapp:+8615573857383",
+        "username": "Usuario", "password": "Password", "servers": "Servidores (uno por línea)",
+        "start_btn": "🚀 Iniciar prueba", "result_label": "Resultados", "warning": "¡Por favor complete todo!",
+        "header_server": "Servidor", "header_status": "Estado", "header_info": "Detalles",
+        "your_ip": "Tu IP Pública"
+    },
+    "Français": {
+        "title": "Testeur IPTV v1.6--Author susan-whatsapp:+8615573857383",
+        "username": "Utilisateur", "password": "Mot de passe", "servers": "Serveurs (un par ligne)",
+        "start_btn": "🚀 Lancer le test", "result_label": "Résultats", "warning": "Veuillez tout remplir !",
+        "header_server": "Serveur", "header_status": "Statut", "header_info": "Détails",
+        "your_ip": "Votre IP Publique"
+    },
+    "Deutsch": {
+        "title": "IPTV Batch Tester v1.6--Author susan- whatsapp:+8615573857383",
+        "username": "Benutzername", "password": "Passwort", "servers": "Serveradressen (eine pro Zeile)",
+        "start_btn": "🚀 Batch-Test starten", "result_label": "Testergebnisse", "warning": "Bitte alles ausfüllen!",
+        "header_server": "Server", "header_status": "Status", "header_info": "Details",
+        "your_ip": "Ihre öffentliche IP"
     }
 }
 
-# 侧边栏
+# ==================== 2. 工具函数 ====================
+@st.cache_data(ttl=3600)  # 缓存1小时，避免频繁请求
+def get_public_ip():
+    """获取当前设备的公网IP"""
+    try:
+        # 使用 ifconfig.me 获取纯文本格式的 IP
+        response = requests.get("https://ifconfig.me/ip", timeout=5)
+        return response.text.strip()
+    except Exception:
+        return "Unknown / 无法获取"
+
+def test_single_server(server, username, password, trans):
+    if not server.startswith("http"): server = "http://" + server
+    server = server.rstrip("/")
+    base_url = f"{server}/player_api.php?username={username}&password={password}"
+    
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    start_time = time.time()
+    
+    try:
+        resp = requests.get(base_url, headers=headers, timeout=12)
+        elapsed = round(time.time() - start_time, 2)
+        
+        if resp.status_code != 200:
+            return {"Server": server, "Status": "❌ HTTP " + str(resp.status_code), "Details": f"{elapsed}s"}
+        
+        data = resp.json()
+        if "user_info" in data:
+            ui = data["user_info"]
+            status = ui.get("status", "Unknown")
+            exp = ui.get("exp_date", "Never")
+            if str(exp).isdigit():
+                exp = time.strftime("%Y-%m-%d", time.localtime(int(exp)))
+            return {"Server": server, "Status": "✅ Active", "Details": f"Status: {status} | Exp: {exp} | {elapsed}s"}
+        return {"Server": server, "Status": "❌ Fail", "Details": "Login Failed"}
+    except Exception:
+        return {"Server": server, "Status": "❌ Error", "Details": "Timeout/Unreachable"}
+
+# ==================== 3. Streamlit 页面布局 ====================
+st.set_page_config(page_title="IPTV Batch Tester", layout="wide", page_icon="📺")
+
+# 获取当前 IP
+current_ip = get_public_ip()
+
+# 侧边栏：语言、IP显示和控制
 st.sidebar.title("Settings / 设定")
-lang_choice = st.sidebar.selectbox("Language / 语言", list(LANGUAGES.keys()))
+lang_choice = st.sidebar.selectbox("Language / 语言 / 言語", list(LANGUAGES.keys()))
 t = LANGUAGES[lang_choice]
 
-# ==================== 2. 主界面布局 ====================
+st.sidebar.markdown("---")
+st.sidebar.subheader(t["your_ip"])
+st.sidebar.code(current_ip, language="bash") # 使用代码框显示，方便复制
+st.sidebar.caption("Detected connection source IP")
+
+# 主界面
 st.title(t["title"])
 st.markdown("---")
 
-col_input, col_info = st.columns([1, 1])
+col_input, col_info = st.columns([2, 1])
 
 with col_input:
-    user = st.text_input(t["username"], key="user")
-    pwd = st.text_input(t["password"], type="password", key="pass")
-    servers_text = st.text_area(t["servers"], height=200, placeholder="example.com:8080")
+    c1, c2 = st.columns(2)
+    with c1:
+        user = st.text_input(t["username"])
+    with c2:
+        pwd = st.text_input(t["password"], type="password")
+    
+    servers_text = st.text_area(t["servers"], height=200, placeholder="http://example.com:8080")
 
 with col_info:
-    st.info("""
-    **运行说明：**
-    1. 探测请求由您的**浏览器直接发出**，反映您当前的真实网络。
-    2. 检测结果会经过您的 **Windows 11** 系统代理（如 **Clash Verge Rev** 或 **Mihomo Party**）。
-    3. 如果在 **1Panel** 环境下部署，请确保容器映射了正确的端口。
+    st.info(f"""
+    **Tips:**
+    - **Current IP:** `{current_ip}`
+    - Use 'http://' or 'https://'
+    - Multi-threading is enabled (fast)
+    - Results can be sorted by clicking headers
     """)
 
-# ==================== 3. 核心探测组件 (JavaScript) ====================
+# 开始按钮
 if st.button(t["start_btn"], type="primary", use_container_width=True):
-    if not servers_text:
-        st.warning("请先输入服务器地址！")
+    if not user or not pwd or not servers_text:
+        st.warning(t["warning"])
     else:
-        # 处理服务器列表
-        server_list = [s.strip() for s in servers_text.splitlines() if s.strip()]
-        js_servers = json.dumps(server_list)
+        servers = [s.strip() for s in servers_text.splitlines() if s.strip()]
+        results = []
         
-        # 注入 HTML/JS 组件
-        components.html(
-            f"""
-            <div id="root" style="background:#1e1e1e; color:#d4d4d4; padding:20px; font-family:Consolas, monospace; border-radius:10px; border:1px solid #333;">
-                <div id="ip-header" style="color:#569cd6; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
-                    正在获取本地公网 IP...
-                </div>
-                <div id="console" style="height:300px; overflow-y:auto; font-size:13px; line-height:1.6;">
-                    > 等待指令...
-                </div>
-            </div>
-
-            <script>
-                const servers = {js_servers};
-                const consoleBox = document.getElementById('console');
-                const ipHeader = document.getElementById('ip-header');
-
-                function log(msg, color="#d4d4d4") {{
-                    const div = document.createElement('div');
-                    div.style.color = color;
-                    div.innerHTML = `[${{new Date().toLocaleTimeString()}}] ${{msg}}`;
-                    consoleBox.appendChild(div);
-                    consoleBox.scrollTop = consoleBox.scrollHeight;
-                }}
-
-                // 1. 获取真实公网 IP
-                fetch('https://api.ipify.org?format=json')
-                    .then(r => r.json())
-                    .then(d => {{ ipHeader.innerText = "您的当前出口 IP: " + d.ip; }})
-                    .catch(() => {{ ipHeader.innerText = "IP 获取失败 (请检查代理规则)"; }});
-
-                // 2. 探测函数 (使用 fetch no-cors 模式绕过安全限制)
-                async function check(url) {{
-                    const fullUrl = url.startsWith('http') ? url : 'http://' + url;
-                    const target = `${{fullUrl}}/player_api.php`;
-                    const start = Date.now();
-                    
-                    try {{
-                        // no-cors 允许浏览器发出请求并接收“不透明”响应，足以判断网络连通性
-                        await fetch(target, {{ mode: 'no-cors', cache: 'no-cache' }});
-                        const duration = Date.now() - start;
-                        return {{ success: true, time: duration }};
-                    }} catch (e) {{
-                        return {{ success: false, time: Date.now() - start }};
-                    }}
-                }}
-
-                async function startTask() {{
-                    log("开始检测本地网络到目标服务器的连通性...", "#ce9178");
-                    for (const s of servers) {{
-                        log(`正在探测: ${{s}}`);
-                        const result = await check(s);
-                        if (result.success) {{
-                            log(`✅ 连通成功 | 响应延迟: ${{result.time}}ms`, "#6a9955");
-                        }} else {{
-                            log(`❌ 无法访问 | 请检查该地址或您的代理分流`, "#f44747");
-                        }}
-                    }}
-                    log("检测任务结束。", "#569cd6");
-                }}
-
-                setTimeout(startTask, 500);
-            </script>
-            """,
-            height=500,
-        )
+        progress_bar = st.progress(0)
+        status_msg = st.empty()
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(test_single_server, s, user, pwd, t) for s in servers]
+            for i, f in enumerate(futures):
+                results.append(f.result())
+                progress_bar.progress((i + 1) / len(servers))
+                status_msg.text(f"Testing: {i+1}/{len(servers)}")
+        
+        st.subheader(t["result_label"])
+        df = pd.DataFrame(results)
+        df.columns = [t["header_server"], t["header_status"], t["header_info"]]
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.success("Done!")
