@@ -1,169 +1,101 @@
 import streamlit as st
-import json
+import requests
+import time
 
-# ==================== 多国语言 ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTVNator 批量检测工具 v3.6 - 纯浏览器本地检测",
+        "title": "IPTVNator 批量检测工具 v2.2 - 服务端检测（推荐）",
         "username": "用户名:",
         "password": "密码:",
         "servers": "服务器地址（一行一个）:",
         "example": "填入示例",
-        "start_btn": "🚀 开始本地浏览器检测",
+        "start_btn": "🚀 开始服务端检测（推荐）",
         "lang_label": "界面语言 / Language:",
-        "footer": "v3.6 纯浏览器本地检测 • 已优化界面显示",
+        "footer": "v2.2 服务端检测 • 绕过CORS • 结果更准确",
         "warning": "请填写服务器列表、账号和密码！",
-        "cors_warning": "⚠️ 纯浏览器本地检测 • 很多服务器会因 CORS 显示“连接失败”",
-        "running": "🚀 从您的浏览器开始检测 {0} 个服务器...",
+        "running": "🚀 服务端正在检测 {0} 个服务器...",
         "detecting": "[{0}/{1}] 检测中: {2}",
         "complete": "✅ 检测完成！共检测 {0} 个服务器。",
         "http_error": "❌ HTTP错误 {0} | 耗时 {1}s",
         "no_userinfo": "❌ 登录失败（无 user_info） | 耗时 {0}s",
-        "timeout": "❌ 超时 (>15秒)",
-        "cors_fail": "❌ 连接失败（浏览器 CORS 限制）",
-        "conn_fail": "❌ 连接失败（服务器不可达）",
-        "unknown": "❌ 未知错误",
+        "timeout": "❌ 超时 (>15s)",
+        "conn_fail": "❌ 连接失败",
+        "unknown": "❌ 未知错误: {0}",
         "available": "✅ 可用 | 耗时 {0}s | 状态: {1} | 过期: {2}"
     }
 }
 
-st.set_page_config(page_title="IPTVNator 纯浏览器检测 v3.6", layout="wide", page_icon="🚀")
-
-lang = st.selectbox(LANGUAGES["简体中文"]["lang_label"], options=list(LANGUAGES.keys()), index=0)
-trans = LANGUAGES[lang]
-
-st.title("🚀 " + trans["title"])
+st.set_page_config(page_title="IPTVNator 服务端检测", layout="wide")
+st.title("🚀 " + LANGUAGES["简体中文"]["title"])
 
 col1, col2 = st.columns([2, 1])
 with col1:
-    username = st.text_input(trans["username"], placeholder="username")
-    password = st.text_input(trans["password"], type="password", placeholder="password")
+    username = st.text_input(LANGUAGES["简体中文"]["username"], placeholder="username")
+    password = st.text_input(LANGUAGES["简体中文"]["password"], type="password", placeholder="password")
 with col2:
-    if st.button(trans["example"], use_container_width=True):
+    if st.button(LANGUAGES["简体中文"]["example"], use_container_width=True):
         st.session_state["servers"] = "http://line.uhdnovus.com\nhttp://onee.pro"
 
-servers_input = st.text_area(trans["servers"], height=180, value=st.session_state.get("servers", ""), placeholder="一行一个服务器地址")
+servers_input = st.text_area(LANGUAGES["简体中文"]["servers"], height=200, value=st.session_state.get("servers", ""), placeholder="一行一个服务器地址")
 
-st.warning(trans["cors_warning"])
-
-if st.button(trans["start_btn"], type="primary", use_container_width=True):
+if st.button(LANGUAGES["简体中文"]["start_btn"], type="primary", use_container_width=True):
     servers = [s.strip() for s in servers_input.strip().splitlines() if s.strip()]
     username_str = username.strip()
     password_str = password.strip()
 
     if not servers or not username_str or not password_str:
-        st.error(trans["warning"])
+        st.error(LANGUAGES["简体中文"]["warning"])
         st.stop()
 
-    username_escaped = username_str.replace('\\', '\\\\').replace('"', '\\"')
-    password_escaped = password_str.replace('\\', '\\\\').replace('"', '\\"')
-    running_text = trans["running"].replace("{0}", str(len(servers)))
+    result_placeholder = st.empty()
+    progress_bar = st.progress(0)
+    result_text = LANGUAGES["简体中文"]["running"].format(len(servers)) + "\n\n"
+    result_placeholder.markdown(result_text)
 
-    full_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>IPTV 检测中...</title>
-        <style>
-            body {{ font-family: system-ui, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }}
-            .panel {{ max-width: 1100px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 30px; }}
-            .progress-container {{ height: 40px; background: #e9ecef; border-radius: 10px; overflow: hidden; margin: 25px 0; }}
-            .progress-bar {{ height: 100%; background: linear-gradient(90deg, #28a745, #20c997); width: 0%; transition: width 0.6s ease; }}
-            .log {{ background: #f8f9fa; border: 2px solid #ddd; padding: 20px; height: 520px; overflow-y: auto; font-family: Consolas, monospace; white-space: pre-wrap; font-size: 14.5px; line-height: 1.65; border-radius: 10px; }}
-        </style>
-    </head>
-    <body>
-    <div class="panel">
-        <h2>🚀 {running_text}</h2>
-        
-        <div class="progress-container">
-            <div id="progressBar" class="progress-bar"></div>
-        </div>
-        <div id="progressText" style="text-align:center; font-weight:bold; font-size:18px; margin-bottom:20px;">0/{len(servers)} (0%)</div>
-        
-        <div id="log" class="log"></div>
-    </div>
+    HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-    <script>
-    const username = "{username_escaped}";
-    const password = "{password_escaped}";
-    const servers = {json.dumps(servers)};
-    const trans = {json.dumps(trans)};
+    for i, server in enumerate(servers, 1):
+        if not server.startswith(("http://", "https://")):
+            server = "http://" + server
+        server = server.rstrip("/")
 
-    let completed = 0;
-    const progressBar = document.getElementById("progressBar");
-    const progressText = document.getElementById("progressText");
-    const logDiv = document.getElementById("log");
+        base_url = f"{server}/player_api.php?username={username_str}&password={password_str}"
 
-    async function testServer(server, index) {{
-        if (!server.startsWith("http")) server = "http://" + server;
-        server = server.replace(/\/$/, "");
-        const baseUrl = server + "/player_api.php?username=" + encodeURIComponent(username) + "&password=" + encodeURIComponent(password);
+        result_text += LANGUAGES["简体中文"]["detecting"].format(i, len(servers), server) + "\n"
+        result_placeholder.markdown(result_text)
 
-        const startTime = Date.now();
-        logDiv.innerHTML += trans.detecting.replace("{0}", index).replace("{1}", servers.length).replace("{2}", server) + "\\n";
-        logDiv.scrollTop = logDiv.scrollHeight;
+        start_time = time.time()
+        try:
+            resp = requests.get(base_url, headers=HEADERS, timeout=15)
+            elapsed = round(time.time() - start_time, 2)
 
-        try {{
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            if resp.status_code != 200:
+                result = LANGUAGES["简体中文"]["http_error"].format(resp.status_code, elapsed)
+            else:
+                data = resp.json()
+                if isinstance(data, dict) and "user_info" in data:
+                    ui = data["user_info"]
+                    status = ui.get("status", "Unknown")
+                    exp = ui.get("exp_date", "永久")
+                    if str(exp).isdigit():
+                        exp = time.strftime("%Y-%m-%d %H:%M", time.localtime(int(exp)))
+                    result = LANGUAGES["简体中文"]["available"].format(elapsed, status, exp)
+                else:
+                    result = LANGUAGES["简体中文"]["no_userinfo"].format(elapsed)
+        except requests.exceptions.Timeout:
+            result = LANGUAGES["简体中文"]["timeout"]
+        except requests.exceptions.ConnectionError:
+            result = LANGUAGES["简体中文"]["conn_fail"]
+        except Exception as e:
+            result = LANGUAGES["简体中文"]["unknown"].format(str(e)[:80])
 
-            const resp = await fetch(baseUrl, {{
-                method: "GET",
-                headers: {{ "Accept": "application/json" }},
-                signal: controller.signal,
-                mode: "cors"
-            }});
+        result_text += f"{server} → {result}\n\n"
+        result_placeholder.markdown(result_text)
+        progress_bar.progress(i / len(servers))
+        time.sleep(0.4)
 
-            clearTimeout(timeoutId);
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    result_text += "\n" + LANGUAGES["简体中文"]["complete"].format(len(servers))
+    result_placeholder.markdown(result_text)
+    st.success("✅ 检测完成！")
 
-            if (resp.status !== 200) {{
-                logDiv.innerHTML += `→ ❌ HTTP错误 ${{resp.status}} | 耗时 ${{elapsed}}s\\n\\n`;
-            }} else {{
-                const data = await resp.json();
-                if (!data || !data.user_info) {{
-                    logDiv.innerHTML += `→ ❌ 登录失败 | 耗时 ${{elapsed}}s\\n\\n`;
-                }} else {{
-                    const ui = data.user_info;
-                    let exp = ui.exp_date || "永久";
-                    if (/^\\d+$/.test(String(exp))) exp = new Date(parseInt(exp)*1000).toLocaleString();
-                    logDiv.innerHTML += `→ ✅ 可用 | 耗时 ${{elapsed}}s | 状态: ${{ui.status || "Unknown"}} | 过期: ${{exp}}\\n\\n`;
-                }}
-            }}
-        }} catch (err) {{
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-            let msg = "❌ 未知错误";
-            if (err.name === "AbortError") msg = trans.timeout;
-            else if (err.message.includes("CORS") || err.message.includes("Failed to fetch")) msg = trans.cors_fail;
-            else msg = trans.conn_fail;
-            logDiv.innerHTML += `→ ${{msg}} | 耗时 ${{elapsed}}s\\n\\n`;
-        }}
-
-        logDiv.scrollTop = logDiv.scrollHeight;
-        completed++;
-
-        const percent = Math.round((completed / servers.length) * 100);
-        progressBar.style.width = percent + "%";
-        progressText.textContent = completed + "/" + servers.length + " (" + percent + "%)";
-
-        await new Promise(r => setTimeout(r, 600));
-    }}
-
-    (async () => {{
-        for (let i = 0; i < servers.length; i++) {{
-            await testServer(servers[i], i + 1);
-        }}
-        logDiv.innerHTML += "\\n" + trans.complete.replace("{0}", servers.length) + "\\n";
-        logDiv.scrollTop = logDiv.scrollHeight;
-    }})();
-    </script>
-    </body>
-    </html>
-    """
-
-    st.components.v1.html(full_html, height=820, scrolling=True)
-
-st.caption(trans["footer"])
-st.info("💡 如果还是没有看到进度条，请尝试：刷新页面、使用 Chrome 浏览器、清空缓存后重试。")
+st.caption(LANGUAGES["简体中文"]["footer"])
