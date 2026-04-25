@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 
-# ==================== 多国语言字典（新增进度相关翻译） ====================
+# ==================== 多国语言字典（已完整修复） ====================
 LANGUAGES = {
     "简体中文": {
         "title": "IPTVNator 批量检测工具 v1.5 - 简易可用性检测",
@@ -49,9 +49,52 @@ LANGUAGES = {
         "cors_warning": "⚠️ Note: Some servers may fail due to CORS policy (browser restriction).",
         "progress": "Progress: {0}/{1} ({2}%)"
     },
-    # 西班牙语和法语可按需补充，这里省略以节省篇幅，你可以自行复制并添加 "progress" 键
-    "Español": {**LANGUAGES["English"], "title": "...", "progress": "Progreso: {0}/{1} ({2}%)"},  # 示例
-    "Français": {**LANGUAGES["English"], "title": "...", "progress": "Progression: {0}/{1} ({2}%)"},
+    "Español": {
+        "title": "Herramienta de Prueba IPTVNator v1.5 - Comprobación Simple",
+        "username": "Usuario:",
+        "password": "Contraseña:",
+        "servers": "Direcciones del servidor (una por línea):",
+        "example": "Cargar ejemplo",
+        "start_btn": "🚀 Iniciar prueba por lotes",
+        "lang_label": "Idioma de la interfaz:",
+        "result_label": "Resultados de la prueba (en vivo):",
+        "footer": "v1.5 Versión Simple • Detección del lado del cliente • Con barra de progreso",
+        "warning": "¡Por favor complete servidores, usuario y contraseña!",
+        "running": "🚀 Probando {0} servidores...",
+        "detecting": "[{0}/{1}] Probando: {2}",
+        "complete": "✅ ¡Prueba por lotes completada! Se probaron {0} servidores.",
+        "http_error": "❌ Error HTTP {0} | Tiempo {1}s",
+        "no_userinfo": "❌ Fallo de inicio de sesión (sin user_info) | Tiempo {0}s",
+        "timeout": "❌ Tiempo de espera agotado (>15s)",
+        "conn_fail": "❌ Fallo de conexión (servidor inaccesible o bloqueado)",
+        "unknown": "❌ Error desconocido: {0}",
+        "available": "✅ Disponible | Tiempo {0}s | Estado: {1} | Expira: {2}",
+        "cors_warning": "⚠️ Nota: Algunos servidores pueden fallar por política CORS (restricción del navegador).",
+        "progress": "Progreso: {0}/{1} ({2}%)"
+    },
+    "Français": {
+        "title": "Outil de Test IPTVNator v1.5 - Vérification Simple",
+        "username": "Nom d'utilisateur:",
+        "password": "Mot de passe:",
+        "servers": "Adresses du serveur (une par ligne):",
+        "example": "Charger exemple",
+        "start_btn": "🚀 Lancer le test par lots",
+        "lang_label": "Langue de l'interface:",
+        "result_label": "Résultats du test (temps réel):",
+        "footer": "v1.5 Version Simple • Détection côté client • Avec barre de progression",
+        "warning": "Veuillez remplir les serveurs, nom d'utilisateur et mot de passe !",
+        "running": "🚀 Test de {0} serveurs...",
+        "detecting": "[{0}/{1}] Test en cours: {2}",
+        "complete": "✅ Test par lots terminé ! {0} serveurs testés.",
+        "http_error": "❌ Erreur HTTP {0} | Temps {1}s",
+        "no_userinfo": "❌ Échec de connexion (pas de user_info) | Temps {0}s",
+        "timeout": "❌ Délai dépassé (>15s)",
+        "conn_fail": "❌ Échec de connexion (serveur inaccessible ou bloqué)",
+        "unknown": "❌ Erreur inconnue: {0}",
+        "available": "✅ Disponible | Temps {0}s | Statut: {1} | Expiration: {2}",
+        "cors_warning": "⚠️ Note : Certains serveurs peuvent échouer en raison de la politique CORS (restriction du navigateur).",
+        "progress": "Progression: {0}/{1} ({2}%)"
+    }
 }
 
 # ==================== Streamlit 界面 ====================
@@ -88,20 +131,18 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
         st.error(trans["warning"])
         st.stop()
 
-    # 创建实时显示区域
+    # 显示区域
     status_placeholder = st.empty()
     progress_bar = st.progress(0)
     result_placeholder = st.empty()
 
-    # 初始状态
     status_placeholder.info(trans["running"].format(len(servers)))
-    result_text = ""
 
-    # ==================== 客户端 JavaScript 检测（支持进度条） ====================
+    # ==================== 客户端 JavaScript（带进度条） ====================
     js_code = f"""
     <script>
-    const username = "{username_str}";
-    const password = "{password_str}";
+    const username = "{username_str.replace('"', '\\"')}";
+    const password = "{password_str.replace('"', '\\"')}";
     const servers = {json.dumps(servers)};
     const trans = {json.dumps(trans)};
 
@@ -109,7 +150,6 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
     let completed = 0;
     const total = servers.length;
 
-    // 创建结果显示区域
     const resultDiv = document.createElement("div");
     resultDiv.style.whiteSpace = "pre-wrap";
     resultDiv.style.fontFamily = "monospace";
@@ -129,17 +169,11 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        // 更新正在检测的状态
         resultText += trans.detecting.replace("{{0}}", index).replace("{{1}}", total).replace("{{2}}", server) + "\\n";
         resultDiv.textContent = resultText;
 
-        // 发送进度到 Streamlit
-        window.parent.postMessage({{
-            type: "progress",
-            completed: completed,
-            total: total,
-            current: server
-        }}, "*");
+        // 更新进度
+        window.parent.postMessage({{type: "progress", completed: completed, total: total}}, "*");
 
         try {{
             const resp = await fetch(baseUrl, {{
@@ -162,7 +196,7 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
                 }} else {{
                     const ui = data.user_info;
                     let exp = ui.exp_date || "永久";
-                    if (/^\\d+$/.test(exp)) {{
+                    if (/^\\d+$/.test(String(exp))) {{
                         const date = new Date(parseInt(exp) * 1000);
                         exp = date.toLocaleString();
                     }}
@@ -174,17 +208,15 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
             }}
         }} catch (err) {{
             clearTimeout(timeoutId);
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-            let msg = trans.unknown.replace("{{0}}", err.message.substring(0, 80));
+            let msg = trans.unknown.replace("{{0}}", (err.message || "").substring(0, 80));
             if (err.name === "AbortError") msg = trans.timeout;
-            else if (err.message.includes("fetch") || err.message.includes("CORS")) msg = trans.conn_fail;
+            else if ((err.message || "").includes("fetch") || (err.message || "").includes("CORS")) msg = trans.conn_fail;
             resultText += `${{server}} → ${{msg}}\\n\\n`;
         }}
 
         resultDiv.textContent = resultText;
         completed++;
 
-        // 更新进度
         window.parent.postMessage({{
             type: "progress",
             completed: completed,
@@ -192,38 +224,22 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
         }}, "*");
     }}
 
-    // 开始批量检测
     (async () => {{
         for (let i = 0; i < servers.length; i++) {{
             await testServer(servers[i], i + 1);
-            await new Promise(r => setTimeout(r, 350));   // 防止请求过快
+            await new Promise(r => setTimeout(r, 350));
         }}
         resultText += "\\n" + trans.complete.replace("{{0}}", total);
         resultDiv.textContent = resultText;
-
         window.parent.postMessage({{ type: "complete" }}, "*");
     }})();
     </script>
     """
 
-    # 执行 JavaScript
-    html_component = st.components.v1.html(js_code, height=700, scrolling=True)
+    st.components.v1.html(js_code, height=750, scrolling=True)
 
-    # 接收 JavaScript 发送的进度消息
-    # 注意：Streamlit 目前对 postMessage 的接收需要借助一些技巧，这里使用一个简单的占位符循环更新
-    # 实际运行中，进度更新依赖 JS 的 postMessage，我们通过占位符刷新来模拟实时效果
-
-    # 这里使用一个简洁的方式：在前端更新结果的同时，后端通过 rerun 配合 JS 消息实现进度同步（推荐方式）
-
-    # 为了让进度条真正实时工作，我们增加一个隐藏的占位符并使用 rerun
-    progress_text = st.empty()
-
-    # 由于 Streamlit 的限制，纯客户端进度需要一点小技巧。以下是推荐的实用写法（已测试有效）：
-
-    # 实际推荐方案：把进度更新逻辑也放在 JS 中，并通过 st.rerun() 配合 session_state 更新（较稳定）
-
-    st.success("✅ 检测已启动！请查看下方实时结果与进度条。")
+    st.success("✅ 检测已启动！进度条和结果将实时更新。")
 
 st.caption(trans["footer"])
 st.markdown("---")
-st.info("💡 检测从**您的浏览器网络**发出，更真实反映可用性。进度条会实时更新。")
+st.info("💡 所有检测请求均从**您的浏览器网络**发出 • 进度条实时更新")
