@@ -4,14 +4,14 @@ import json
 # ==================== 多国语言字典 ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTVNator 批量检测工具 v3.3 - 纯浏览器本地检测",
+        "title": "IPTVNator 批量检测工具 v3.4 - 纯浏览器本地检测",
         "username": "用户名:",
         "password": "密码:",
         "servers": "服务器地址（一行一个）:",
         "example": "填入示例",
         "start_btn": "🚀 开始本地浏览器检测",
         "lang_label": "界面语言 / Language:",
-        "footer": "v3.3 纯浏览器本地检测 • 已修复启动报错",
+        "footer": "v3.4 纯浏览器本地检测 • 已修复启动报错",
         "warning": "请填写服务器列表、账号和密码！",
         "cors_warning": "⚠️ 这是纯浏览器本地检测。很多服务器会因 CORS 显示“连接失败”。这是浏览器安全限制。",
         "running": "🚀 从您的浏览器开始检测 {0} 个服务器...",
@@ -26,14 +26,14 @@ LANGUAGES = {
         "available": "✅ 可用 | 耗时 {0}s | 状态: {1} | 过期: {2}"
     },
     "English": {
-        "title": "IPTVNator Batch Tester v3.3 - Pure Browser Local",
+        "title": "IPTVNator Batch Tester v3.4 - Pure Browser Local",
         "username": "Username:",
         "password": "Password:",
         "servers": "Server Addresses (one per line):",
         "example": "Load Example",
         "start_btn": "🚀 Start Browser Local Test",
         "lang_label": "Interface Language:",
-        "footer": "v3.3 Pure Browser Local Detection",
+        "footer": "v3.4 Pure Browser Local Detection",
         "warning": "Please fill in servers, username and password!",
         "cors_warning": "⚠️ Pure browser local test. Many servers will fail due to CORS.",
         "running": "🚀 Starting browser local test for {0} servers...",
@@ -49,7 +49,7 @@ LANGUAGES = {
     }
 }
 
-st.set_page_config(page_title="IPTVNator 纯浏览器检测 v3.3", layout="wide", page_icon="🚀")
+st.set_page_config(page_title="IPTVNator 纯浏览器检测 v3.4", layout="wide", page_icon="🚀")
 
 lang = st.selectbox(LANGUAGES["简体中文"]["lang_label"], options=list(LANGUAGES.keys()), index=0)
 trans = LANGUAGES[lang]
@@ -82,11 +82,10 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
         st.error(trans["warning"])
         st.stop()
 
-    # 安全转义
     username_escaped = username_str.replace('\\', '\\\\').replace('"', '\\"')
     password_escaped = password_str.replace('\\', '\\\\').replace('"', '\\"')
-
-    # 正确处理 running 文本
+    
+    # 预处理 running 文本，避免 f-string 冲突
     running_text = trans["running"].replace("{0}", str(len(servers)))
 
     html_code = f"""
@@ -98,7 +97,6 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
 
     let completed = 0;
 
-    // 创建界面
     const container = document.createElement("div");
     container.innerHTML = `
         <div style="margin:25px 0; padding:25px; background:white; border-radius:12px; box-shadow:0 4px 25px rgba(0,0,0,0.1);">
@@ -174,7 +172,7 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
 
         const percent = Math.round((completed / servers.length) * 100);
         progressBar.style.width = percent + "%";
-        progressText.textContent = `${completed}/${servers.length} (${percent}%)`;
+        progressText.textContent = completed + "/" + servers.length + " (" + percent + "%)";
 
         await new Promise(r => setTimeout(r, 550));
     }}
@@ -183,7 +181,7 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
         for (let i = 0; i < servers.length; i++) {{
             await testServer(servers[i], i + 1);
         }}
-        logDiv.innerHTML += `\\n${trans.complete.replace("{0}", servers.length)}\\n`;
+        logDiv.innerHTML += "\\n" + trans.complete.replace("{0}", servers.length) + "\\n";
         logDiv.scrollTop = logDiv.scrollHeight;
     }})();
     </script>
@@ -192,4 +190,4 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
     st.components.v1.html(html_code, height=750, scrolling=True)
 
 st.caption(trans["footer"])
-st.info("💡 已修复启动报错。如果进度条还是不动，请尝试刷新页面或使用 Chrome 浏览器测试。")
+st.info("💡 已彻底修复字符串报错。如果进度条还是不动，请刷新页面或尝试使用 Chrome 浏览器。")
