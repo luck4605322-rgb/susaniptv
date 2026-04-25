@@ -2,10 +2,11 @@ import streamlit as st
 import requests
 import time
 import pandas as pd
+import streamlit.components.v1 as components
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
-# ==================== 1. 多国语言字典（扩展版） ====================
+# ==================== 1. 多国语言字典 ====================
 LANGUAGES = {
     "简体中文": {
         "title": "IPTVNator 网页批量检测工具 v1.6--作者susan,whatsapp:+8615573857383",
@@ -25,7 +26,7 @@ LANGUAGES = {
         "title": "IPTVNator 一括検知ツール v1.6--Author susan- whatsapp:+8615573857383",
         "username": "ユーザー名", "password": "パスワード", "servers": "サーバーアドレス（1行に1つ）",
         "start_btn": "🚀 一括テスト開始", "result_label": "テスト結果", "warning": "情報をすべて入力してください！",
-        "header_server": "サーバー", "header_status": "状態", "header_info": "詳細情報",
+        "header_server": "サーバー", "header_status": "状态", "header_info": "詳細情報",
         "your_ip": "あなたのパブリックIP"
     },
     "한국어": {
@@ -34,41 +35,10 @@ LANGUAGES = {
         "start_btn": "🚀 일괄 테스트 시작", "result_label": "테스트 결과", "warning": "모든 정보를 입력하세요!",
         "header_server": "서버", "header_status": "상태", "header_info": "상세 정보",
         "your_ip": "당신의 공인 IP"
-    },
-    "Español": {
-        "title": "Probador de IPTV v1.6--Author susan-whatsapp:+8615573857383",
-        "username": "Usuario", "password": "Password", "servers": "Servidores (uno por línea)",
-        "start_btn": "🚀 Iniciar prueba", "result_label": "Resultados", "warning": "¡Por favor complete todo!",
-        "header_server": "Servidor", "header_status": "Estado", "header_info": "Detalles",
-        "your_ip": "Tu IP Pública"
-    },
-    "Français": {
-        "title": "Testeur IPTV v1.6--Author susan-whatsapp:+8615573857383",
-        "username": "Utilisateur", "password": "Mot de passe", "servers": "Serveurs (un par ligne)",
-        "start_btn": "🚀 Lancer le test", "result_label": "Résultats", "warning": "Veuillez tout remplir !",
-        "header_server": "Serveur", "header_status": "Statut", "header_info": "Détails",
-        "your_ip": "Votre IP Publique"
-    },
-    "Deutsch": {
-        "title": "IPTV Batch Tester v1.6--Author susan- whatsapp:+8615573857383",
-        "username": "Benutzername", "password": "Passwort", "servers": "Serveradressen (eine pro Zeile)",
-        "start_btn": "🚀 Batch-Test starten", "result_label": "Testergebnisse", "warning": "Bitte alles ausfüllen!",
-        "header_server": "Server", "header_status": "Status", "header_info": "Details",
-        "your_ip": "Ihre öffentliche IP"
     }
 }
 
 # ==================== 2. 工具函数 ====================
-@st.cache_data(ttl=3600)  # 缓存1小时，避免频繁请求
-def get_public_ip():
-    """获取当前设备的公网IP"""
-    try:
-        # 使用 ifconfig.me 获取纯文本格式的 IP
-        response = requests.get("https://ifconfig.me/ip", timeout=5)
-        return response.text.strip()
-    except Exception:
-        return "Unknown / 无法获取"
-
 def test_single_server(server, username, password, trans):
     if not server.startswith("http"): server = "http://" + server
     server = server.rstrip("/")
@@ -99,18 +69,41 @@ def test_single_server(server, username, password, trans):
 # ==================== 3. Streamlit 页面布局 ====================
 st.set_page_config(page_title="IPTV Batch Tester", layout="wide", page_icon="📺")
 
-# 获取当前 IP
-current_ip = get_public_ip()
-
-# 侧边栏：语言、IP显示和控制
+# 侧边栏设置
 st.sidebar.title("Settings / 设定")
-lang_choice = st.sidebar.selectbox("Language / 语言 / 言語", list(LANGUAGES.keys()))
+lang_choice = st.sidebar.selectbox("Language / 语言", list(LANGUAGES.keys()))
 t = LANGUAGES[lang_choice]
 
 st.sidebar.markdown("---")
 st.sidebar.subheader(t["your_ip"])
-st.sidebar.code(current_ip, language="bash") # 使用代码框显示，方便复制
-st.sidebar.caption("Detected connection source IP")
+
+# 【核心修改点】通过嵌入 HTML/JS 获取访问者的真实 IP
+# 这种方法让浏览器去请求 ipify.org，从而获得访问者当前的出口 IP
+components.html(
+    f"""
+    <div id="ip-display" style="
+        background-color: #0e1117; 
+        color: #ff4b4b; 
+        padding: 10px; 
+        border-radius: 5px; 
+        border: 1px solid #31333f;
+        font-family: 'Source Code Pro', monospace;
+        font-size: 14px;
+    ">检测中...</div>
+    <script>
+        fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => {{
+                document.getElementById('ip-display').innerText = data.ip;
+            }})
+            .catch(err => {{
+                document.getElementById('ip-display').innerText = '获取失败 (请检查网络)';
+            }});
+    </script>
+    """,
+    height=60,
+)
+st.sidebar.caption("Detected via browser (Client-side)")
 
 # 主界面
 st.title(t["title"])
@@ -130,10 +123,10 @@ with col_input:
 with col_info:
     st.info(f"""
     **Tips:**
-    - **Current IP:** `{current_ip}`
-    - Use 'http://' or 'https://'
-    - Multi-threading is enabled (fast)
-    - Results can be sorted by clicking headers
+    - 使用 'http://' 或 'https://'
+    - 启用多线程检测 (10线程)
+    - 点击表格表头可进行排序
+    - IP 显示受您本地代理 (如 Clash) 规则影响
     """)
 
 # 开始按钮
