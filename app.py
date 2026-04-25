@@ -1,148 +1,205 @@
 import streamlit as st
+import requests
+import time
 
-# ==================== 完整 HTML + JS 代码 ====================
-html_code = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>IPTVNator 本地检测工具 v1.7</title>
-    <style>
-        body { 
-            font-family: system-ui, sans-serif; 
-            background: #0f172a; 
-            color: #e2e8f0; 
-            padding: 20px; 
-            margin: 0;
-        }
-        .container { max-width: 1000px; margin: 0 auto; }
-        h1 { color: #60a5fa; text-align: center; }
-        label { display: block; margin: 15px 0 5px; font-weight: bold; }
-        input, textarea { 
-            width: 100%; 
-            padding: 12px; 
-            margin-bottom: 15px; 
-            border: 1px solid #475569; 
-            border-radius: 8px; 
-            background: #1e2937; 
-            color: white; 
-            font-size: 16px;
-        }
-        button { 
-            width: 100%; 
-            padding: 16px; 
-            font-size: 20px; 
-            background: #3b82f6; 
-            color: white; 
-            border: none; 
-            border-radius: 10px; 
-            cursor: pointer;
-            margin: 20px 0;
-        }
-        button:hover { background: #2563eb; }
-        pre { 
-            background: #1e2937; 
-            padding: 15px; 
-            border-radius: 8px; 
-            min-height: 400px; 
-            white-space: pre-wrap; 
-            font-family: monospace;
-            overflow: auto;
-        }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h1>🚀 IPTVNator 批量检测工具 v1.7 - 本地检测版</h1>
-    <p style="text-align:center; color:#94a3b8;">所有请求直接在您的浏览器中执行，更真实、更安全</p>
-
-    <label>用户名:</label>
-    <input type="text" id="username" placeholder="输入用户名">
-
-    <label>密码:</label>
-    <input type="password" id="password" placeholder="输入密码">
-
-    <label>服务器地址（一行一个）:</label>
-    <textarea id="servers" rows="10" placeholder="http://example.com:8080\nhttp://test.tv:12345"></textarea>
-
-    <button onclick="startTest()">🚀 开始本地批量检测</button>
-
-    <h3>检测结果（实时）:</h3>
-    <pre id="result">点击上方按钮开始检测...\n如果没有反应，请按 F12 查看控制台</pre>
-</div>
-
-<script>
-console.log("✅ IPTV 本地检测工具 JS 已成功加载");
-
-async function testSingleServer(server, username, password) {
-    console.log("正在检测:", server);
-    if (!server.startsWith("http")) server = "http://" + server;
-    server = server.replace(/\/$/, "");
-    const url = server + "/player_api.php?username=" + encodeURIComponent(username) + "&password=" + encodeURIComponent(password);
-    
-    try {
-        const resp = await fetch(url, {
-            method: "GET",
-            signal: AbortSignal.timeout(15000),
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-        });
-        
-        if (!resp.ok) return `❌ HTTP错误 ${resp.status}`;
-        
-        const data = await resp.json();
-        if (!data || !data.user_info) return "❌ 登录失败（无 user_info）";
-        
-        const ui = data.user_info;
-        let exp = ui.exp_date || "永久";
-        if (/^\\d+$/.test(String(exp))) {
-            exp = new Date(exp * 1000).toLocaleString();
-        }
-        return `✅ 可用 | 状态: ${ui.status || "Unknown"} | 过期: ${exp}`;
-    } catch (e) {
-        console.error(e);
-        return e.name === "TimeoutError" ? "❌ 超时 (>15s)" : "❌ 连接失败或被阻挡";
+# ==================== 多国语言字典（完整版） ====================
+LANGUAGES = {
+    "简体中文": {
+        "title": "IPTVNator 批量检测工具 v1.5 - 简易可用性检测",
+        "username": "用户名:",
+        "password": "密码:",
+        "servers": "服务器地址（一行一个）:",
+        "example": "填入示例",
+        "start_btn": "🚀 开始批量检测",
+        "lang_label": "界面语言 / Language:",
+        "result_label": "检测结果（实时）:",
+        "footer": "v1.5 简易版 • 只检测是否可用 + 状态 + 过期时间 • Streamlit版",
+        "warning": "请填写服务器列表、账号和密码！",
+        "running": "🚀 开始检测 {0} 个服务器...",
+        "only_first": "",
+        "single": "",
+        "detecting": "[{0}/{1}] 检测中: {2}\n",
+        "complete": "✅ 批量检测完成！共检测 {0} 个服务器。",
+        "http_error": "❌ HTTP错误 {0} | 耗时 {1}s",
+        "no_userinfo": "❌ 登录失败（无 user_info） | 耗时 {0}s",
+        "timeout": "❌ 超时 (>15s)",
+        "conn_fail": "❌ 连接失败 (服务器不可达或被阻挡)",
+        "unknown": "❌ 未知错误: {0}",
+        "available": "✅ 可用 | 耗时 {0}s | 状态: {1} | 过期: {2}"
+    },
+    "English": {
+        "title": "IPTVNator Batch Tester v1.5 - Simple Availability Check",
+        "username": "Username:",
+        "password": "Password:",
+        "servers": "Server Addresses (one per line):",
+        "example": "Load Example",
+        "start_btn": "🚀 Start Batch Test",
+        "lang_label": "Interface Language:",
+        "result_label": "Test Results (Live):",
+        "footer": "v1.5 Simple Version • Only checks availability + status + expiration • Streamlit",
+        "warning": "Please fill in servers, username and password!",
+        "running": "🚀 Testing {0} servers...",
+        "only_first": "",
+        "single": "",
+        "detecting": "[{0}/{1}] Testing: {2}\n",
+        "complete": "✅ Batch test completed! Tested {0} servers.",
+        "http_error": "❌ HTTP Error {0} | Time {1}s",
+        "no_userinfo": "❌ Login failed (no user_info) | Time {0}s",
+        "timeout": "❌ Timeout (>15s)",
+        "conn_fail": "❌ Connection failed (unreachable or blocked)",
+        "unknown": "❌ Unknown error: {0}",
+        "available": "✅ Available | Time {0}s | Status: {1} | Exp: {2}"
+    },
+    "Español": {
+        "title": "Herramienta de Prueba IPTVNator v1.5 - Comprobación Simple",
+        "username": "Usuario:",
+        "password": "Contraseña:",
+        "servers": "Direcciones del servidor (una por línea):",
+        "example": "Cargar ejemplo",
+        "start_btn": "🚀 Iniciar prueba por lotes",
+        "lang_label": "Idioma de la interfaz:",
+        "result_label": "Resultados de la prueba (en vivo):",
+        "footer": "v1.5 Versión Simple • Solo verifica disponibilidad + estado + expiración",
+        "warning": "¡Por favor complete servidores, usuario y contraseña!",
+        "running": "🚀 Probando {0} servidores...",
+        "only_first": "",
+        "single": "",
+        "detecting": "[{0}/{1}] Probando: {2}\n",
+        "complete": "✅ ¡Prueba por lotes completada! Se probaron {0} servidores.",
+        "http_error": "❌ Error HTTP {0} | Tiempo {1}s",
+        "no_userinfo": "❌ Fallo de inicio de sesión (sin user_info) | Tiempo {0}s",
+        "timeout": "❌ Tiempo de espera agotado (>15s)",
+        "conn_fail": "❌ Fallo de conexión (servidor inaccesible o bloqueado)",
+        "unknown": "❌ Error desconocido: {0}",
+        "available": "✅ Disponible | Tiempo {0}s | Estado: {1} | Expira: {2}"
+    },
+    "Français": {
+        "title": "Outil de Test IPTVNator v1.5 - Vérification Simple",
+        "username": "Nom d'utilisateur:",
+        "password": "Mot de passe:",
+        "servers": "Adresses du serveur (une par ligne):",
+        "example": "Charger exemple",
+        "start_btn": "🚀 Lancer le test par lots",
+        "lang_label": "Langue de l'interface:",
+        "result_label": "Résultats du test (temps réel):",
+        "footer": "v1.5 Version Simple • Vérifie uniquement la disponibilité + statut + expiration",
+        "warning": "Veuillez remplir les serveurs, nom d'utilisateur et mot de passe !",
+        "running": "🚀 Test de {0} serveurs...",
+        "only_first": "",
+        "single": "",
+        "detecting": "[{0}/{1}] Test en cours: {2}\n",
+        "complete": "✅ Test par lots terminé ! {0} serveurs testés.",
+        "http_error": "❌ Erreur HTTP {0} | Temps {1}s",
+        "no_userinfo": "❌ Échec de connexion (pas de user_info) | Temps {0}s",
+        "timeout": "❌ Délai dépassé (>15s)",
+        "conn_fail": "❌ Échec de connexion (serveur inaccessible ou bloqué)",
+        "unknown": "❌ Erreur inconnue: {0}",
+        "available": "✅ Disponible | Temps {0}s | Statut: {1} | Expiration: {2}"
     }
 }
 
-async function startTest() {
-    console.log("🚀 startTest() 被成功触发！");
-    
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value.trim();
-    const serversText = document.getElementById("servers").value.trim();
-    
-    if (!username || !password || !serversText) {
-        alert("请填写用户名、密码和服务器列表！");
-        return;
-    }
-    
-    const servers = serversText.split("\n").map(s => s.trim()).filter(s => s);
-    const resultDiv = document.getElementById("result");
-    
-    resultDiv.textContent = `🚀 开始检测 ${servers.length} 个服务器...\n\n`;
-    
-    for (let i = 0; i < servers.length; i++) {
-        const server = servers[i];
-        resultDiv.textContent += `[${i+1}/${servers.length}] 检测中: ${server}\n`;
-        
-        const res = await testSingleServer(server, username, password);
-        resultDiv.textContent += `→ ${res}\n\n`;
-        
-        await new Promise(r => setTimeout(r, 400));
-    }
-    
-    resultDiv.textContent += "✅ 批量检测完成！";
-    console.log("检测流程结束");
+# ==================== 请求头 ====================
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate",
+    "Connection": "close",
+    "Cache-Control": "no-cache",
 }
-</script>
-</body>
-</html>
-"""
 
-st.set_page_config(page_title="IPTVNator 本地检测工具", layout="wide", page_icon="🚀")
+def test_single_server(server, username, password, trans):
+    if not server.startswith("http"):
+        server = "http://" + server
+    server = server.rstrip("/")
+    base_url = f"{server}/player_api.php?username={username}&password={password}"
+    
+    start_time = time.time()
+    session = requests.Session()
+    
+    try:
+        resp = session.get(base_url, headers=HEADERS, timeout=15, allow_redirects=True)
+        elapsed = round(time.time() - start_time, 2)
+        
+        if resp.status_code != 200:
+            result = trans["http_error"].format(resp.status_code, elapsed)
+            return f"{server}  →  {result}", False
+        
+        data = resp.json()
+        if not (isinstance(data, dict) and "user_info" in data):
+            result = trans["no_userinfo"].format(elapsed)
+            return f"{server}  →  {result}", False
+        
+        ui = data.get("user_info", {})
+        status = ui.get("status", "Unknown")
+        exp = ui.get("exp_date", "永久")
+        if str(exp).isdigit():
+            exp = time.strftime("%Y-%m-%d %H:%M", time.localtime(int(exp)))
+        
+        result = trans["available"].format(elapsed, status, exp)
+        return f"{server}  →  {result}", True
+        
+    except requests.exceptions.Timeout:
+        result = trans["timeout"]
+    except requests.exceptions.ConnectionError:
+        result = trans["conn_fail"]
+    except Exception as e:
+        result = trans["unknown"].format(str(e)[:80])
+    
+    return f"{server}  →  {result}", False
 
-# 使用 st.html + unsafe_allow_javascript=True（关键修复）
-st.html(html_code, unsafe_allow_javascript=True)
+# ==================== Streamlit 界面 ====================
+st.set_page_config(page_title="IPTVNator 批量检测工具 v1.5", layout="wide", page_icon="🚀")
+st.title("🚀 IPTVNator 批量检测工具 v1.5 - 简易可用性检测")
 
-st.caption("💡 本工具所有网络请求均在您的浏览器本地执行，不会经过任何服务器。")
-st.info("🔍 点击按钮后若无反应，请按 **F12** → Console 查看是否有错误信息，并告诉我。")
+# 语言切换
+lang = st.selectbox(LANGUAGES["简体中文"]["lang_label"], options=list(LANGUAGES.keys()), index=0)
+trans = LANGUAGES[lang]
+
+col1, col2 = st.columns([2, 1])
+with col1:
+    username = st.text_input(trans["username"], placeholder="username")
+    password = st.text_input(trans["password"], type="password", placeholder="password")
+with col2:
+    if st.button(trans["example"], use_container_width=True):
+        st.session_state["servers"] = "http://example.com:8080\nhttp://test.tv:12345\nhttp://backup.server:9999"
+
+servers_input = st.text_area(
+    trans["servers"],
+    height=200,
+    value=st.session_state.get("servers", ""),
+    placeholder="一行一个服务器地址\nhttp://example.com:8080"
+)
+
+if st.button(trans["start_btn"], type="primary", use_container_width=True):
+    servers = [s.strip() for s in servers_input.strip().splitlines() if s.strip()]
+    username_str = username.strip()
+    password_str = password.strip()
+
+    if not servers or not username_str or not password_str:
+        st.error(trans["warning"])
+        st.stop()
+
+    result_text = trans["running"].format(len(servers)) + "\n\n"
+    
+    result_placeholder = st.empty()
+    result_placeholder.markdown(result_text)
+
+    for i, server in enumerate(servers, 1):
+        result_text += trans["detecting"].format(i, len(servers), server)
+        result_placeholder.markdown(result_text)
+
+        result_str, _ = test_single_server(server, username_str, password_str, trans)
+        
+        result_text += result_str + "\n\n"
+        result_placeholder.markdown(result_text)
+
+        time.sleep(0.3)
+
+    result_text += "\n" + trans["complete"].format(len(servers))
+    result_placeholder.markdown(result_text)
+    st.success("✅ 检测完成！")
+
+st.caption(trans["footer"])
+st.markdown("---")
+st.info("💡 本版本仅检测登录是否成功，不再统计直播/电影数量，速度更快。")
