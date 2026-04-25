@@ -1,13 +1,12 @@
-import flet as ft
+import streamlit as st
 import requests
-import threading
 import time
 from collections import defaultdict
 
 # ==================== 多国语言字典（完整版） ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTVNator 批量检测工具 v1.5 (Web版)",
+        "title": "IPTVNator 批量检测工具 v1.5",
         "username": "用户名:",
         "password": "密码:",
         "servers": "服务器地址（一行一个）:",
@@ -15,7 +14,7 @@ LANGUAGES = {
         "start_btn": "🚀 开始批量检测",
         "lang_label": "界面语言 / Language:",
         "result_label": "检测结果（实时）:",
-        "footer": "v1.5 Web版 • Flet 构建 • 仅第一个成功服务器检测直播/电影/语言分类 • 基于 Xtream API",
+        "footer": "v1.5 Streamlit版 • 仅第一个成功服务器检测直播/电影/语言分类 • 基于 Xtream API",
         "warning": "请填写服务器列表、账号和密码！",
         "running": "🚀 开始检测 {0} 个服务器...",
         "only_first": "   → 只对第一个成功登录的服务器检测直播数量、电影数量和多国语言分类\n\n",
@@ -32,7 +31,7 @@ LANGUAGES = {
         "lang_stats": " | 语言分类: {0}"
     },
     "English": {
-        "title": "IPTVNator Batch Tester v1.5 (Web)",
+        "title": "IPTVNator Batch Tester v1.5",
         "username": "Username:",
         "password": "Password:",
         "servers": "Server Addresses (one per line):",
@@ -40,7 +39,7 @@ LANGUAGES = {
         "start_btn": "🚀 Start Batch Test",
         "lang_label": "Interface Language:",
         "result_label": "Test Results (Live):",
-        "footer": "v1.5 Web Version • Built with Flet • Only first successful server checks Live/Movies/Languages",
+        "footer": "v1.5 Streamlit Version • Only first successful server checks Live/Movies/Languages",
         "warning": "Please fill in servers, username and password!",
         "running": "🚀 Testing {0} servers...",
         "only_first": "   → Only the first successful server will check live count, movie count and language categories\n\n",
@@ -57,7 +56,7 @@ LANGUAGES = {
         "lang_stats": " | Languages: {0}"
     },
     "Español": {
-        "title": "Herramienta de Prueba IPTVNator v1.5 (Web)",
+        "title": "Herramienta de Prueba IPTVNator v1.5",
         "username": "Usuario:",
         "password": "Contraseña:",
         "servers": "Direcciones del servidor (una por línea):",
@@ -82,7 +81,7 @@ LANGUAGES = {
         "lang_stats": " | Idiomas: {0}"
     },
     "Français": {
-        "title": "Outil de Test par Lots IPTVNator v1.5 (Web)",
+        "title": "Outil de Test par Lots IPTVNator v1.5",
         "username": "Nom d'utilisateur:",
         "password": "Mot de passe:",
         "servers": "Adresses du serveur (une par ligne):",
@@ -108,7 +107,7 @@ LANGUAGES = {
     }
 }
 
-# ==================== 请求头（防封锁） ====================
+# ==================== 请求头 & 辅助函数（完全复制你的原逻辑） ====================
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
     "Accept": "application/json, text/plain, */*",
@@ -118,7 +117,6 @@ HEADERS = {
     "Cache-Control": "no-cache",
 }
 
-# ==================== 语言分类映射 ====================
 LANGUAGE_MAP = {
     "english": "English", "eng": "English",
     "arabic": "Arabic", "ara": "Arabic",
@@ -228,153 +226,74 @@ def test_single_server(server, username, password, trans, check_resources=True):
     
     return f"{server}  →  {result}", False
 
-# ==================== Flet 主应用 ====================
-def main(page: ft.Page):
-    page.title = "IPTVNator 批量检测工具 v1.5 (Web)"
-    page.theme_mode = ft.ThemeMode.DARK
-    page.padding = 20
-    page.scroll = "auto"
-    page.window_min_width = 1100
-    page.window_min_height = 750
+# ==================== Streamlit 界面 ====================
+st.set_page_config(page_title="IPTVNator 批量检测工具 v1.5", layout="wide", page_icon="🚀")
+st.title("🚀 IPTVNator 批量检测工具 v1.5")
 
-    current_lang = "简体中文"
-    trans = LANGUAGES[current_lang]
+# 语言切换
+lang = st.selectbox(LANGUAGES["简体中文"]["lang_label"], options=list(LANGUAGES.keys()), index=0)
+trans = LANGUAGES[lang]
 
-    title = ft.Text(trans["title"], size=28, weight="bold", color=ft.colors.BLUE_400)
+col1, col2 = st.columns([2, 1])
+with col1:
+    username = st.text_input(trans["username"], placeholder="username")
+    password = st.text_input(trans["password"], type="password", placeholder="password")
+with col2:
+    if st.button(trans["example"], use_container_width=True):
+        st.session_state["servers"] = "http://example.com:8080\nhttp://test.tv:12345\nhttp://backup.server:9999"
 
-    lang_dropdown = ft.Dropdown(
-        label=trans["lang_label"],
-        options=[ft.dropdown.Option(lang) for lang in LANGUAGES.keys()],
-        value=current_lang,
-        width=250,
-    )
+servers_input = st.text_area(
+    trans["servers"],
+    height=180,
+    value=st.session_state.get("servers", ""),
+    placeholder="一行一个服务器地址\n例如：http://example.com:8080"
+)
 
-    username_field = ft.TextField(label=trans["username"], width=650, dense=True)
-    password_field = ft.TextField(label=trans["password"], password=True, can_reveal_password=True, width=650, dense=True)
+start_button = st.button(trans["start_btn"], type="primary", use_container_width=True)
+
+result_container = st.container()
+
+if start_button:
+    servers = [s.strip() for s in servers_input.strip().splitlines() if s.strip()]
+    username = username.strip()
+    password = password.strip()
+
+    if not servers or not username or not password:
+        st.error(trans["warning"])
+        st.stop()
+
+    result_text = trans["running"].format(len(servers))
+    if len(servers) > 1:
+        result_text += trans["only_first"]
+    else:
+        result_text += trans["single"]
     
-    servers_field = ft.TextField(
-        label=trans["servers"],
-        multiline=True,
-        min_lines=12,
-        max_lines=18,
-        width=850,
-        hint_text="http://example.com:8080\nhttp://test.tv:12345\nhttp://backup.server:9999",
-    )
+    with result_container:
+        st.markdown("### " + trans["result_label"])
+        result_placeholder = st.empty()
+        result_placeholder.markdown(result_text)
 
-    result_area = ft.TextField(
-        value="",
-        multiline=True,
-        read_only=True,
-        min_lines=22,
-        max_lines=35,
-        width=1100,
-        text_size=13,
-        font_family="Consolas",
-    )
+    resource_checked = False
 
-    progress_ring = ft.ProgressRing(visible=False, width=32, height=32, stroke_width=4)
+    for i, server in enumerate(servers, 1):
+        result_text += trans["detecting"].format(i, len(servers), server)
+        result_placeholder.markdown(result_text)
 
-    def change_language(e):
-        nonlocal trans, current_lang
-        new_lang = lang_dropdown.value
-        if new_lang == current_lang:
-            return
-        current_lang = new_lang
-        trans = LANGUAGES[new_lang]
-        title.value = trans["title"]
-        lang_dropdown.label = trans["lang_label"]
-        username_field.label = trans["username"]
-        password_field.label = trans["password"]
-        servers_field.label = trans["servers"]
-        start_btn.text = trans["start_btn"]
-        result_label.value = trans["result_label"]
-        footer.value = trans["footer"]
-        page.update()
+        check_res = (not resource_checked) and (i == 1 or len(servers) == 1)
+        result_str, success = test_single_server(server, username, password, trans, check_res)
+        
+        result_text += result_str + "\n\n"
+        result_placeholder.markdown(result_text)
 
-    lang_dropdown.on_change = change_language
+        if success and not resource_checked:
+            resource_checked = True
 
-    def load_example(e):
-        servers_field.value = "http://example.com:8080\nhttp://test.tv:12345\nhttp://backup.server:9999"
-        page.update()
+        time.sleep(0.4)  # 防止请求过快
 
-    def start_batch_test(e):
-        servers = [s.strip() for s in servers_field.value.strip().splitlines() if s.strip()]
-        username = username_field.value.strip()
-        password = password_field.value.strip()
+    result_text += "\n" + trans["complete"].format(len(servers))
+    result_placeholder.markdown(result_text)
+    st.success("✅ 检测完成！")
 
-        if not servers or not username or not password:
-            page.show_snack_bar(ft.SnackBar(content=ft.Text(trans["warning"]), bgcolor=ft.colors.RED_600))
-            return
-
-        result_area.value = ""
-        if len(servers) > 1:
-            result_area.value += trans["running"].format(len(servers)) + trans["only_first"]
-        else:
-            result_area.value += trans["running"].format(len(servers)) + trans["single"]
-        page.update()
-
-        start_btn.disabled = True
-        progress_ring.visible = True
-        page.update()
-
-        resource_checked = False
-
-        def run_tests():
-            nonlocal resource_checked
-            for i, server in enumerate(servers, 1):
-                result_area.value += trans["detecting"].format(i, len(servers), server)
-                page.update()
-
-                check_res = (not resource_checked) and (i == 1 or len(servers) == 1)
-                result_str, success = test_single_server(server, username, password, trans, check_res)
-                
-                result_area.value += result_str + "\n\n"
-                page.update()
-
-                if success and not resource_checked:
-                    resource_checked = True
-                
-                time.sleep(0.4)
-
-            progress_ring.visible = False
-            start_btn.disabled = False
-            result_area.value += "\n" + trans["complete"].format(len(servers)) + "\n"
-            page.update()
-            page.show_snack_bar(ft.SnackBar(content=ft.Text(trans["complete"].format(len(servers)), color=ft.colors.GREEN_400)))
-
-        threading.Thread(target=run_tests, daemon=True).start()
-
-    start_btn = ft.ElevatedButton(
-        text=trans["start_btn"],
-        icon=ft.icons.ROCKET_LAUNCH,
-        on_click=start_batch_test,
-        bgcolor=ft.colors.GREEN_700,
-        color=ft.colors.WHITE,
-        height=55,
-        width=220,
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12))
-    )
-
-    example_btn = ft.TextButton(trans["example"], on_click=load_example, icon=ft.icons.ADD_CIRCLE)
-
-    result_label = ft.Text(trans["result_label"], weight="bold", size=16)
-    footer = ft.Text(trans["footer"], color=ft.colors.GREY_500, size=13)
-
-    page.add(
-        ft.Column([
-            title,
-            ft.Row([lang_dropdown], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Divider(height=10),
-            username_field,
-            password_field,
-            ft.Row([servers_field, example_btn]),
-            ft.Row([start_btn, progress_ring], alignment=ft.MainAxisAlignment.CENTER, spacing=30),
-            result_label,
-            result_area,
-            footer
-        ], spacing=15, expand=True, scroll=ft.ScrollMode.AUTO)
-    )
-
-# 本地运行测试
-if __name__ == "__main__":
-    ft.app(target=main, view=ft.WEB_BROWSER, port=8502)
+st.caption(trans["footer"])
+st.markdown("---")
+st.markdown("**提示**：部分服务器可能因 CORS 限制无法直接检测。如果大量失败，可尝试使用 CORS 代理（如 https://corsproxy.io/? + 服务器地址）。")
