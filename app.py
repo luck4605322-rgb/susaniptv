@@ -4,19 +4,19 @@ import json
 # ==================== 多国语言 ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTVNator 批量检测工具 v3.5 - 纯浏览器本地检测",
+        "title": "IPTVNator 批量检测工具 v3.6 - 纯浏览器本地检测",
         "username": "用户名:",
         "password": "密码:",
         "servers": "服务器地址（一行一个）:",
         "example": "填入示例",
         "start_btn": "🚀 开始本地浏览器检测",
         "lang_label": "界面语言 / Language:",
-        "footer": "v3.5 纯浏览器本地检测 • 已优化界面显示",
+        "footer": "v3.6 纯浏览器本地检测 • 已优化界面显示",
         "warning": "请填写服务器列表、账号和密码！",
-        "cors_warning": "⚠️ 纯浏览器本地检测 • 很多服务器会因 CORS 显示连接失败（浏览器安全限制）",
+        "cors_warning": "⚠️ 纯浏览器本地检测 • 很多服务器会因 CORS 显示“连接失败”",
         "running": "🚀 从您的浏览器开始检测 {0} 个服务器...",
         "detecting": "[{0}/{1}] 检测中: {2}",
-        "complete": "✅ 浏览器本地检测完成！共检测 {0} 个服务器。",
+        "complete": "✅ 检测完成！共检测 {0} 个服务器。",
         "http_error": "❌ HTTP错误 {0} | 耗时 {1}s",
         "no_userinfo": "❌ 登录失败（无 user_info） | 耗时 {0}s",
         "timeout": "❌ 超时 (>15秒)",
@@ -24,32 +24,10 @@ LANGUAGES = {
         "conn_fail": "❌ 连接失败（服务器不可达）",
         "unknown": "❌ 未知错误",
         "available": "✅ 可用 | 耗时 {0}s | 状态: {1} | 过期: {2}"
-    },
-    "English": {
-        "title": "IPTVNator Batch Tester v3.5 - Pure Browser Local",
-        "username": "Username:",
-        "password": "Password:",
-        "servers": "Server Addresses (one per line):",
-        "example": "Load Example",
-        "start_btn": "🚀 Start Browser Local Test",
-        "lang_label": "Interface Language:",
-        "footer": "v3.5 Pure Browser Local Detection",
-        "warning": "Please fill in servers, username and password!",
-        "cors_warning": "⚠️ Pure browser local test. Many servers fail due to CORS.",
-        "running": "🚀 Starting browser local test for {0} servers...",
-        "detecting": "[{0}/{1}] Testing: {2}",
-        "complete": "✅ Browser local test completed! Tested {0} servers.",
-        "http_error": "❌ HTTP Error {0} | Time {1}s",
-        "no_userinfo": "❌ Login failed (no user_info) | Time {0}s",
-        "timeout": "❌ Timeout (>15s)",
-        "cors_fail": "❌ Connection failed (Browser CORS restriction)",
-        "conn_fail": "❌ Connection failed (Server unreachable)",
-        "unknown": "❌ Unknown error",
-        "available": "✅ Available | Time {0}s | Status: {1} | Exp: {2}"
     }
 }
 
-st.set_page_config(page_title="IPTVNator 纯浏览器检测 v3.5", layout="wide", page_icon="🚀")
+st.set_page_config(page_title="IPTVNator 纯浏览器检测 v3.6", layout="wide", page_icon="🚀")
 
 lang = st.selectbox(LANGUAGES["简体中文"]["lang_label"], options=list(LANGUAGES.keys()), index=0)
 trans = LANGUAGES[lang]
@@ -64,9 +42,7 @@ with col2:
     if st.button(trans["example"], use_container_width=True):
         st.session_state["servers"] = "http://line.uhdnovus.com\nhttp://onee.pro"
 
-servers_input = st.text_area(trans["servers"], height=180, 
-                             value=st.session_state.get("servers", ""), 
-                             placeholder="一行一个服务器地址")
+servers_input = st.text_area(trans["servers"], height=180, value=st.session_state.get("servers", ""), placeholder="一行一个服务器地址")
 
 st.warning(trans["cors_warning"])
 
@@ -83,7 +59,32 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
     password_escaped = password_str.replace('\\', '\\\\').replace('"', '\\"')
     running_text = trans["running"].replace("{0}", str(len(servers)))
 
-    detection_html = f"""
+    full_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>IPTV 检测中...</title>
+        <style>
+            body {{ font-family: system-ui, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }}
+            .panel {{ max-width: 1100px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 30px; }}
+            .progress-container {{ height: 40px; background: #e9ecef; border-radius: 10px; overflow: hidden; margin: 25px 0; }}
+            .progress-bar {{ height: 100%; background: linear-gradient(90deg, #28a745, #20c997); width: 0%; transition: width 0.6s ease; }}
+            .log {{ background: #f8f9fa; border: 2px solid #ddd; padding: 20px; height: 520px; overflow-y: auto; font-family: Consolas, monospace; white-space: pre-wrap; font-size: 14.5px; line-height: 1.65; border-radius: 10px; }}
+        </style>
+    </head>
+    <body>
+    <div class="panel">
+        <h2>🚀 {running_text}</h2>
+        
+        <div class="progress-container">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div id="progressText" style="text-align:center; font-weight:bold; font-size:18px; margin-bottom:20px;">0/{len(servers)} (0%)</div>
+        
+        <div id="log" class="log"></div>
+    </div>
+
     <script>
     const username = "{username_escaped}";
     const password = "{password_escaped}";
@@ -91,24 +92,6 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
     const trans = {json.dumps(trans)};
 
     let completed = 0;
-
-    // 创建独立检测面板
-    document.body.innerHTML = `
-        <div style="padding:30px; max-width:1100px; margin:0 auto;">
-            <div style="background:white; padding:30px; border-radius:16px; box-shadow:0 8px 30px rgba(0,0,0,0.15);">
-                <h2 style="margin-top:0; color:#28a745;">🚀 ${{running_text}}</h2>
-                
-                <div style="height:38px; background:#e9ecef; border-radius:10px; overflow:hidden; margin:25px 0;">
-                    <div id="progressBar" style="height:100%; background:linear-gradient(90deg,#28a745,#20c997); width:0%; transition:width 0.6s ease;"></div>
-                </div>
-                <div id="progressText" style="text-align:center; font-weight:bold; font-size:18px; margin-bottom:20px;">0/${{servers.length}} (0%)</div>
-                
-                <div id="log" style="background:#f8f9fa; border:2px solid #ddd; padding:20px; height:520px; overflow-y:auto; 
-                                    font-family:Consolas,monospace; white-space:pre-wrap; font-size:14.5px; line-height:1.65; border-radius:10px;"></div>
-            </div>
-        </div>
-    `;
-
     const progressBar = document.getElementById("progressBar");
     const progressText = document.getElementById("progressText");
     const logDiv = document.getElementById("log");
@@ -124,7 +107,7 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
 
         try {{
             const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 15000);
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
 
             const resp = await fetch(baseUrl, {{
                 method: "GET",
@@ -133,7 +116,7 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
                 mode: "cors"
             }});
 
-            clearTimeout(id);
+            clearTimeout(timeoutId);
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
             if (resp.status !== 200) {{
@@ -164,7 +147,7 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
         const percent = Math.round((completed / servers.length) * 100);
         progressBar.style.width = percent + "%";
         progressText.textContent = completed + "/" + servers.length + " (" + percent + "%)";
-        
+
         await new Promise(r => setTimeout(r, 600));
     }}
 
@@ -176,9 +159,11 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
         logDiv.scrollTop = logDiv.scrollHeight;
     }})();
     </script>
+    </body>
+    </html>
     """
 
-    st.components.v1.html(detection_html, height=820, scrolling=True)
+    st.components.v1.html(full_html, height=820, scrolling=True)
 
 st.caption(trans["footer"])
-st.info("💡 如果还是没有看到进度条，请尝试：1. 刷新页面 2. 使用 Chrome 浏览器 3. 清空缓存后重试")
+st.info("💡 如果还是没有看到进度条，请尝试：刷新页面、使用 Chrome 浏览器、清空缓存后重试。")
