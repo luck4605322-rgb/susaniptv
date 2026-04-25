@@ -1,11 +1,7 @@
-import streamlit as st
-import time
-import pandas as pd
-
-# ==================== 1. 多语言字典（新增欧美语言 + WhatsApp） ====================
+# ==================== 1. 多语言字典（v1.8.1 已修复葡萄牙语重音符问题） ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTVNator 网页批量检测工具 v1.8（客户端检测）--作者susan, WhatsApp: +8615573857383",
+        "title": "IPTVNator 网页批量检测工具 v1.8.1（客户端检测）--作者susan, WhatsApp: +8615573857383",
         "username": "用户名", 
         "password": "密码", 
         "servers": "服务器地址（一行一个）",
@@ -20,7 +16,7 @@ LANGUAGES = {
         "client_note": "✅ 检测现在从您的本地网络发起（真实家宽/流量/VPN）"
     },
     "English": {
-        "title": "IPTVNator Web Batch Tester v1.8 (Client-Side) --Author susan, WhatsApp: +8615573857383",
+        "title": "IPTVNator Web Batch Tester v1.8.1 (Client-Side) --Author susan, WhatsApp: +8615573857383",
         "username": "Username", 
         "password": "Password", 
         "servers": "Server Addresses (one per line)",
@@ -35,7 +31,7 @@ LANGUAGES = {
         "client_note": "✅ Detection now runs from your local network (real home broadband / mobile / VPN)"
     },
     "Español": {
-        "title": "Probador Masivo IPTV v1.8 (Detección del Cliente) --Autor susan, WhatsApp: +8615573857383",
+        "title": "Probador Masivo IPTV v1.8.1 (Detección del Cliente) --Autor susan, WhatsApp: +8615573857383",
         "username": "Usuario", 
         "password": "Contraseña", 
         "servers": "Direcciones del servidor (una por línea)",
@@ -50,7 +46,7 @@ LANGUAGES = {
         "client_note": "✅ La detección ahora se ejecuta desde su red local (fibra / móvil / VPN real)"
     },
     "Français": {
-        "title": "Testeur IPTV Batch v1.8 (Côté Client) --Auteur susan, WhatsApp: +8615573857383",
+        "title": "Testeur IPTV Batch v1.8.1 (Côté Client) --Auteur susan, WhatsApp: +8615573857383",
         "username": "Nom d'utilisateur", 
         "password": "Mot de passe", 
         "servers": "Adresses des serveurs (une par ligne)",
@@ -65,7 +61,7 @@ LANGUAGES = {
         "client_note": "✅ Le test s'exécute maintenant depuis votre réseau local (fibre / mobile / VPN réel)"
     },
     "Deutsch": {
-        "title": "IPTV Batch Tester v1.8 (Client-Seite) --Autor susan, WhatsApp: +8615573857383",
+        "title": "IPTV Batch Tester v1.8.1 (Client-Seite) --Autor susan, WhatsApp: +8615573857383",
         "username": "Benutzername", 
         "password": "Passwort", 
         "servers": "Serveradressen (eine pro Zeile)",
@@ -80,5 +76,33 @@ LANGUAGES = {
         "client_note": "✅ Die Prüfung läuft jetzt von Ihrem lokalen Netzwerk (echtes Breitband / Mobil / VPN)"
     },
     "Português": {
-        "title": "Testador IPTV em Lote v1.8 (Lado do Cliente) --Autor susan, WhatsApp: +8615573857383",
-        "username": "Nome de usuário
+        "title": "Testador IPTV em Lote v1.8.1 (Lado do Cliente) --Autor susan, WhatsApp: +8615573857383",
+        "username": "Nome de usuário", 
+        "password": "Senha", 
+        "servers": "Endereços dos servidores (um por linha)",
+        "start_btn": "🚀 Iniciar teste em lote da minha rede local", 
+        "result_label": "Resultados do teste", 
+        "warning": "Por favor, preencha todas as informações!",
+        "testing": "Testando diretamente do seu navegador...",
+        "header_server": "Servidor", 
+        "header_status": "Status", 
+        "header_info": "Detalhes",
+        "your_ip": "Seu IP Público", 
+        "client_note": "✅ A detecção agora é feita da sua rede local (fibra / móvel / VPN real)"
+    },
+    "Italiano": {
+        "title": "Tester IPTV Batch v1.8.1 (Lato Client) --Autore susan, WhatsApp: +8615573857383",
+        "username": "Nome utente", 
+        "password": "Password", 
+        "servers": "Indirizzi server (uno per riga)",
+        "start_btn": "🚀 Avvia test batch dalla mia rete locale", 
+        "result_label": "Risultati del test", 
+        "warning": "Si prega di compilare tutte le informazioni!",
+        "testing": "Test in corso direttamente dal tuo browser...",
+        "header_server": "Server", 
+        "header_status": "Stato", 
+        "header_info": "Dettagli",
+        "your_ip": "Il tuo IP Pubblico", 
+        "client_note": "✅ Il test ora viene eseguito dalla tua rete locale (fibra / mobile / VPN reale)"
+    }
+}
