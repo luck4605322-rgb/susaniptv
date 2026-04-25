@@ -4,14 +4,14 @@ import json
 # ==================== 多国语言字典 ====================
 LANGUAGES = {
     "简体中文": {
-        "title": "IPTVNator 批量检测工具 v1.6 - 浏览器端检测",
+        "title": "IPTVNator 批量检测工具 v1.7 - 浏览器端检测",
         "username": "用户名:",
         "password": "密码:",
         "servers": "服务器地址（一行一个）:",
         "example": "填入示例",
         "start_btn": "🚀 开始批量检测",
         "lang_label": "界面语言 / Language:",
-        "footer": "v1.6 • 纯浏览器端检测 • 实时进度条",
+        "footer": "v1.7 • 纯浏览器端检测 • 实时进度条",
         "warning": "请填写服务器列表、账号和密码！",
         "running": "🚀 正在检测 {0} 个服务器...",
         "detecting": "[{0}/{1}] 检测中 → {2}",
@@ -26,14 +26,14 @@ LANGUAGES = {
         "progress_text": "检测进度：{0}/{1} ({2}%)"
     },
     "English": {
-        "title": "IPTVNator Batch Tester v1.6 - Client-side Detection",
+        "title": "IPTVNator Batch Tester v1.7 - Client-side Detection",
         "username": "Username:",
         "password": "Password:",
         "servers": "Server Addresses (one per line):",
         "example": "Load Example",
         "start_btn": "🚀 Start Batch Test",
         "lang_label": "Interface Language:",
-        "footer": "v1.6 • Pure Browser-side Test • Real-time Progress",
+        "footer": "v1.7 • Pure Browser-side Test • Real-time Progress",
         "warning": "Please fill in servers, username and password!",
         "running": "🚀 Testing {0} servers...",
         "detecting": "[{0}/{1}] Testing → {2}",
@@ -48,14 +48,14 @@ LANGUAGES = {
         "progress_text": "Progress: {0}/{1} ({2}%)"
     },
     "Español": {
-        "title": "Herramienta de Prueba IPTVNator v1.6",
+        "title": "Herramienta de Prueba IPTVNator v1.7",
         "username": "Usuario:",
         "password": "Contraseña:",
         "servers": "Direcciones del servidor (una por línea):",
         "example": "Cargar ejemplo",
         "start_btn": "🚀 Iniciar prueba por lotes",
         "lang_label": "Idioma de la interfaz:",
-        "footer": "v1.6 • Detección del lado del cliente",
+        "footer": "v1.7 • Detección del lado del cliente",
         "warning": "¡Por favor complete servidores, usuario y contraseña!",
         "running": "🚀 Probando {0} servidores...",
         "detecting": "[{0}/{1}] Probando → {2}",
@@ -70,14 +70,14 @@ LANGUAGES = {
         "progress_text": "Progreso: {0}/{1} ({2}%)"
     },
     "Français": {
-        "title": "Outil de Test IPTVNator v1.6",
+        "title": "Outil de Test IPTVNator v1.7",
         "username": "Nom d'utilisateur:",
         "password": "Mot de passe:",
         "servers": "Adresses du serveur (une par ligne):",
         "example": "Charger exemple",
         "start_btn": "🚀 Lancer le test par lots",
         "lang_label": "Langue de l'interface:",
-        "footer": "v1.6 • Détection côté client",
+        "footer": "v1.7 • Détection côté client",
         "warning": "Veuillez remplir les serveurs, nom d'utilisateur et mot de passe !",
         "running": "🚀 Test de {0} serveurs...",
         "detecting": "[{0}/{1}] Test en cours → {2}",
@@ -127,25 +127,29 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
         st.error(trans["warning"])
         st.stop()
 
-    # ==================== 纯前端 JavaScript 检测（已修复 f-string 问题） ====================
-    js_code = """
+    # 安全转义用户名和密码（防止 JS 注入）
+    username_escaped = username_str.replace('\\', '\\\\').replace('"', '\\"').replace("'", "\\'")
+    password_escaped = password_str.replace('\\', '\\\\').replace('"', '\\"').replace("'", "\\'")
+
+    # ==================== 纯前端 JavaScript 检测（最稳定版） ====================
+    js_code = f"""
     <script>
-    const username = "{username_str}";
-    const password = "{password_str}";
-    const servers = {servers_json};
-    const trans = {trans_json};
+    const username = "{username_escaped}";
+    const password = "{password_escaped}";
+    const servers = {json.dumps(servers)};
+    const trans = {json.dumps(trans)};
 
     // 创建检测界面
     let html = `
         <div style="margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 10px; background: #f8f9fa;">
-            <h3>${trans.running.replace('{0}', servers.length)}</h3>
+            <h3>${{trans.running.replace('{{0}}', servers.length)}}</h3>
             
             <div style="margin: 15px 0;">
-                <div id="progressContainer" style="height: 28px; background: #e0e0e0; border-radius: 6px; overflow: hidden;">
+                <div style="height: 28px; background: #e0e0e0; border-radius: 6px; overflow: hidden;">
                     <div id="progressBar" style="height: 100%; background: linear-gradient(90deg, #4CAF50, #45a049); width: 0%; transition: width 0.4s ease;"></div>
                 </div>
                 <div id="progressText" style="text-align: center; margin-top: 8px; font-weight: bold; color: #333;">
-                    0/${servers.length} (0%)
+                    0/${{servers.length}} (0%)
                 </div>
             </div>
             
@@ -164,87 +168,82 @@ if st.button(trans["start_btn"], type="primary", use_container_width=True):
 
     let completed = 0;
 
-    async function testServer(server, index) {
+    async function testServer(server, index) {{
         if (!server.startsWith("http")) server = "http://" + server;
-        server = server.replace(/\/$/, "");
+        server = server.replace(/\\/$/, "");
         const baseUrl = server + "/player_api.php?username=" + encodeURIComponent(username) + "&password=" + encodeURIComponent(password);
 
         const startTime = Date.now();
-        logDiv.innerHTML += trans.detecting.replace("{0}", index).replace("{1}", servers.length).replace("{2}", server) + "\\n";
+        logDiv.innerHTML += trans.detecting.replace("{{0}}", index).replace("{{1}}", servers.length).replace("{{2}}", server) + "\\n";
         logDiv.scrollTop = logDiv.scrollHeight;
 
-        try {
+        try {{
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 15000);
 
-            const resp = await fetch(baseUrl, {
+            const resp = await fetch(baseUrl, {{
                 method: "GET",
-                headers: { "Accept": "application/json" },
+                headers: {{ "Accept": "application/json" }},
                 signal: controller.signal,
                 mode: "cors",
                 cache: "no-cache"
-            });
+            }});
 
             clearTimeout(timeout);
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
-            if (resp.status !== 200) {
-                logDiv.innerHTML += `→ ${trans.http_error.replace("{0}", resp.status).replace("{1}", elapsed)}\\n\\n`;
-            } else {
+            if (resp.status !== 200) {{
+                logDiv.innerHTML += `→ ${{trans.http_error.replace("{{0}}", resp.status).replace("{{1}}", elapsed)}}\\n\\n`;
+            }} else {{
                 const data = await resp.json();
-                if (!data || !data.user_info) {
-                    logDiv.innerHTML += `→ ${trans.no_userinfo.replace("{0}", elapsed)}\\n\\n`;
-                } else {
+                if (!data || !data.user_info) {{
+                    logDiv.innerHTML += `→ ${{trans.no_userinfo.replace("{{0}}", elapsed)}}\\n\\n`;
+                }} else {{
                     const ui = data.user_info;
                     let exp = ui.exp_date || "永久";
-                    if (/^\\d+$/.test(String(exp))) {
+                    if (/^\\d+$/.test(String(exp))) {{
                         exp = new Date(parseInt(exp) * 1000).toLocaleString();
-                    }
-                    const msg = trans.available.replace("{0}", elapsed)
-                                             .replace("{1}", ui.status || "Unknown")
-                                             .replace("{2}", exp);
-                    logDiv.innerHTML += `→ ${msg}\\n\\n`;
-                }
-            }
-        } catch (err) {
+                    }}
+                    const msg = trans.available.replace("{{0}}", elapsed)
+                                             .replace("{{1}}", ui.status || "Unknown")
+                                             .replace("{{2}}", exp);
+                    logDiv.innerHTML += `→ ${{msg}}\\n\\n`;
+                }}
+            }}
+        }} catch (err) {{
             let msg = trans.unknown;
             if (err.name === "AbortError") msg = trans.timeout;
-            else if ((err.message || "").toLowerCase().includes("cors") || (err.message || "").includes("fetch")) {
+            else if ((err.message || "").toLowerCase().includes("cors") || (err.message || "").includes("fetch")) {{
                 msg = trans.conn_fail;
-            }
-            logDiv.innerHTML += `→ ${msg}\\n\\n`;
-        }
+            }}
+            logDiv.innerHTML += `→ ${{msg}}\\n\\n`;
+        }}
 
         logDiv.scrollTop = logDiv.scrollHeight;
         completed++;
 
         const percent = Math.round((completed / servers.length) * 100);
         progressBar.style.width = percent + "%";
-        progressText.textContent = trans.progress_text.replace("{0}", completed)
-                                                       .replace("{1}", servers.length)
-                                                       .replace("{2}", percent);
-    }
+        progressText.textContent = trans.progress_text.replace("{{0}}", completed)
+                                                       .replace("{{1}}", servers.length)
+                                                       .replace("{{2}}", percent);
+    }}
 
-    // 执行检测
-    (async () => {
-        for (let i = 0; i < servers.length; i++) {
+    // 开始批量检测
+    (async () => {{
+        for (let i = 0; i < servers.length; i++) {{
             await testServer(servers[i], i + 1);
             await new Promise(r => setTimeout(r, 400));
-        }
-        logDiv.innerHTML += `\\n${trans.complete.replace("{0}", servers.length)}\\n`;
+        }}
+        logDiv.innerHTML += `\\n${{trans.complete.replace("{{0}}", servers.length)}}\\n`;
         logDiv.scrollTop = logDiv.scrollHeight;
-    })();
+    }})();
     </script>
-    """.format(
-        username_str=username_str.replace('"', '\\"'),
-        password_str=password_str.replace('"', '\\"'),
-        servers_json=json.dumps(servers),
-        trans_json=json.dumps(trans)
-    )
+    """
 
-    st.components.v1.html(js_code, height=680, scrolling=True)
+    st.components.v1.html(js_code, height=700, scrolling=True)
 
-    st.success("✅ 检测已在浏览器中启动！请查看上方实时进度条和检测日志。")
+    st.success("✅ 检测已在浏览器中启动！请查看上方实时进度条和日志。")
 
 st.caption(trans["footer"])
-st.info("💡 检测全部从您的浏览器发出 • 部分服务器因 CORS 限制会显示失败，这是正常现象。")
+st.info("💡 检测全部从您的浏览器发出 • 部分服务器因 CORS 会显示失败，属于正常现象。")
