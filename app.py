@@ -6,154 +6,116 @@ html_code = """
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>IPTVNator 批量检测工具 v1.6</title>
+    <title>IPTV 测试工具 - 诊断版</title>
     <style>
-        body { font-family: system-ui, sans-serif; padding: 20px; background: #0f172a; color: #e2e8f0; margin: 0; }
-        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
-        h1 { color: #60a5fa; }
-        label { display: block; margin: 15px 0 6px; font-weight: 600; }
-        input, textarea, select { width: 100%; padding: 12px; border: 1px solid #334155; border-radius: 8px; background: #1e2937; color: #e2e8f0; font-size: 16px; box-sizing: border-box; }
-        button { padding: 14px 28px; font-size: 18px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 20px 0; width: 100%; }
+        body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; }
+        button { 
+            width: 100%; 
+            padding: 18px; 
+            font-size: 20px; 
+            background: #3b82f6; 
+            color: white; 
+            border: none; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            margin: 20px 0;
+        }
         button:hover { background: #2563eb; }
-        pre { background: #1e2937; color: #94a3b8; padding: 18px; border-radius: 10px; white-space: pre-wrap; font-family: monospace; min-height: 420px; line-height: 1.5; overflow: auto; }
+        pre { 
+            background: #1e2937; 
+            padding: 15px; 
+            border-radius: 8px; 
+            min-height: 300px; 
+            white-space: pre-wrap; 
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🚀 IPTVNator 批量检测工具 v1.6 - 本地检测版</h1>
-    
-    <label>界面语言 / Language:</label>
-    <select id="lang_select" onchange="changeLanguage()">
-        <option value="简体中文">简体中文</option>
-        <option value="English">English</option>
-    </select>
+    <h1>🚀 IPTVNator 批量检测工具 - 诊断版 v1.7</h1>
+    <p style="color:#94a3b8;">如果按钮点击后这里没有任何变化，请按 F12 查看控制台错误</p>
 
     <label>用户名:</label>
-    <input type="text" id="username" placeholder="username">
+    <input type="text" id="username" placeholder="请输入用户名" style="width:100%; padding:10px; margin-bottom:10px;">
 
     <label>密码:</label>
-    <input type="password" id="password" placeholder="password">
+    <input type="password" id="password" placeholder="请输入密码" style="width:100%; padding:10px; margin-bottom:10px;">
 
     <label>服务器地址（一行一个）:</label>
-    <textarea id="servers" rows="9" placeholder="http://example.com:8080"></textarea>
+    <textarea id="servers" rows="8" placeholder="http://example.com:8080" style="width:100%; padding:10px;"></textarea>
 
     <button onclick="startTest()">🚀 开始本地批量检测</button>
 
     <h3>检测结果（实时）:</h3>
-    <pre id="result">点击按钮后这里会显示进度...\n（请按 F12 查看控制台是否有错误）</pre>
-
-    <p style="color:#64748b; font-size:14px; margin-top:30px;">
-        v1.6 本地检测版 • 所有请求在您的浏览器中执行
-    </p>
+    <pre id="result">等待点击按钮...\n（请按 F12 查看控制台是否有红色错误）</pre>
 </div>
 
 <script>
-console.log("=== IPTV 测试工具 JS 已加载 ===");
-
-const LANGUAGES = {
-    "简体中文": {
-        "warning": "请填写用户名、密码和服务器列表！",
-        "running": "🚀 开始检测 ",
-        "detecting": "检测中: ",
-        "complete": "✅ 批量检测完成！共检测 "
-    },
-    "English": {
-        "warning": "Please fill in username, password and servers!",
-        "running": "🚀 Testing ",
-        "detecting": "Testing: ",
-        "complete": "✅ Batch test completed! Tested "
-    }
-};
-
-let currentLang = "简体中文";
-let trans = LANGUAGES[currentLang];
-
-function changeLanguage() {
-    currentLang = document.getElementById("lang_select").value;
-    trans = LANGUAGES[currentLang] || LANGUAGES["简体中文"];
-    console.log("语言切换为:", currentLang);
-}
+console.log("✅ IPTV 诊断版 JS 已成功加载");
 
 async function testSingleServer(server, username, password) {
-    console.log("正在测试服务器:", server);
+    console.log("开始测试:", server);
     if (!server.startsWith("http")) server = "http://" + server;
     server = server.replace(/\/$/, "");
     const url = server + "/player_api.php?username=" + encodeURIComponent(username) + "&password=" + encodeURIComponent(password);
     
-    const startTime = Date.now();
     try {
-        const controller = new AbortController();
-        setTimeout(() => controller.abort(), 15000);
-        
-        const resp = await fetch(url, {
-            method: "GET",
-            signal: controller.signal,
+        const resp = await fetch(url, { 
+            method: "GET", 
+            signal: AbortSignal.timeout(15000),
             headers: { "User-Agent": "Mozilla/5.0" }
         });
-        
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
         console.log("响应状态:", resp.status);
-        
-        if (!resp.ok) return "❌ HTTP错误 " + resp.status + " | 耗时 " + elapsed + "s";
-        
-        const data = await resp.json();
-        if (!data || !data.user_info) return "❌ 登录失败（无 user_info） | 耗时 " + elapsed + "s";
-        
-        const ui = data.user_info;
-        let exp = ui.exp_date || "永久";
-        if (/^\\d+$/.test(String(exp))) {
-            exp = new Date(exp * 1000).toLocaleString();
-        }
-        return "✅ 可用 | 耗时 " + elapsed + "s | 状态: " + (ui.status || "Unknown") + " | 过期: " + exp;
-        
-    } catch (err) {
-        console.error("测试失败:", err);
-        if (err.name === "AbortError") return "❌ 超时 (>15s)";
-        return "❌ 连接失败或被浏览器阻挡（可能是 CORS） | " + err.message;
+        return "✅ 测试完成（状态 " + resp.status + "）";
+    } catch (e) {
+        console.error("请求失败:", e);
+        return "❌ 请求失败: " + e.message;
     }
 }
 
 async function startTest() {
-    console.log("=== startTest() 被点击执行 ===");
+    console.log("🚀 startTest() 函数被成功触发！");
+    alert("✅ 按钮点击已触发！\n\n请查看 F12 控制台是否有其他信息。");
     
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
     const serversText = document.getElementById("servers").value.trim();
     
     if (!username || !password || !serversText) {
-        alert(trans.warning);
-        console.warn("输入不完整");
+        alert("请填写用户名、密码和服务器！");
         return;
     }
     
-    const servers = serversText.split("\n").map(s => s.trim()).filter(Boolean);
+    const servers = serversText.split("\n").map(s => s.trim()).filter(s => s);
     const resultDiv = document.getElementById("result");
     
-    resultDiv.textContent = trans.running + servers.length + " 个服务器...\n\n";
-    console.log("开始检测", servers.length, "个服务器");
+    resultDiv.textContent = "🚀 开始检测 " + servers.length + " 个服务器...\n\n";
     
     for (let i = 0; i < servers.length; i++) {
         const server = servers[i];
-        resultDiv.textContent += "[" + (i+1) + "/" + servers.length + "] " + trans.detecting + server + "\n";
+        resultDiv.textContent += "[" + (i+1) + "/" + servers.length + "] 检测中: " + server + "\n";
         
-        const resultStr = await testSingleServer(server, username, password);
-        resultDiv.textContent += server + " → " + resultStr + "\n\n";
+        const res = await testSingleServer(server, username, password);
+        resultDiv.textContent += "→ " + res + "\n\n";
         
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 500));
     }
     
-    resultDiv.textContent += "\n" + trans.complete + servers.length + " 个服务器。";
-    console.log("检测流程结束");
+    resultDiv.textContent += "✅ 检测流程结束";
+    console.log("检测完成");
 }
 
-console.log("脚本初始化完成，按钮已绑定");
+// 确保脚本加载后立即输出
+console.log("脚本初始化完成，按钮已绑定 onclick");
 </script>
 </body>
 </html>
 """
 
-st.set_page_config(page_title="IPTVNator 批量检测工具 v1.6", layout="wide", page_icon="🚀")
+st.set_page_config(page_title="IPTV 诊断版", layout="wide")
 
-components.html(html_code, height=1000, scrolling=True)
+components.html(html_code, height=950, scrolling=True)
 
-st.info("💡 **调试提示**：点击按钮后请按 F12 打开控制台，查看是否有红色错误信息，并截图发给我。")
+st.info("🔍 **诊断提示**：点击按钮后请立即按 **F12** → Console 标签，复制所有红色/黄色信息发给我。")
